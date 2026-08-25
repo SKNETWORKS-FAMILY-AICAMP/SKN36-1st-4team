@@ -32,6 +32,8 @@ IMAGE_DIR = PROJECT_ROOT / "assets" / "vehicles"
 ICON_DIR = PROJECT_ROOT / "assets" / "icons"
 IMAGE_ALIAS_PATH = PROJECT_ROOT / "data" / "mappings" / "vehicle_image_aliases.csv"
 AD_IMAGE_PATH = PROJECT_ROOT / "assets" / "recall_public_service_ad.png"
+HERO_IMAGE_PATH = PROJECT_ROOT / "assets" / "hero" / "korean-family-suv-sunrise-v2.png"
+SERVICE_LOGO_PATH = PROJECT_ROOT / "assets" / "brand" / "recall-check-logo-v1.png"
 PUBLIC_AD_HIDE_COOKIE = "recall_ad_hide_date"
 
 # 공식 확인 링크
@@ -74,6 +76,7 @@ MANUFACTURER_ICON_FILES = {
 
 # 조회한 차량을 실제 매물 사이트에서 다시 찾아볼 수 있는 외부 링크
 USED_CAR_MARKET_LINKS = [
+    ("markets/heydealer", "헤이딜러", "내 차 시세·중고차", "https://www.heydealer.com/"),
     ("markets/danawa", "다나와 자동차", "중고차 매물 검색", "https://auto.danawa.com/usedcar/"),
     ("markets/encar", "엔카", "국내 중고차 매물", "https://www.encar.com/"),
     ("markets/kbchachacha", "KB차차차", "중고차 검색·시세", "https://www.kbchachacha.com/public/search/main.kbc"),
@@ -90,7 +93,7 @@ ICON_MIME_TYPES = {
 
 st.set_page_config(
     page_title="리콜체크 | 중고차 결함·리콜 조회",
-    page_icon="🚙",
+    page_icon=str(SERVICE_LOGO_PATH),
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -103,15 +106,17 @@ st.markdown(
     """
     <style>
     :root {
-        --navy: #14213d;
-        --blue: #2f6fce;
-        --sky: #eef5ff;
-        --line: #dce7f5;
-        --muted: #71809a;
-        --green: #208567;
-        --orange: #e78932;
+        --navy: #10213d;
+        --blue: #245ccb;
+        --sky: #fff5ed;
+        --line: #ecd9c9;
+        --muted: #707486;
+        --green: #2b7d67;
+        --orange: #e98666;
+        --cream: #fffaf5;
+        --coral: #f0a06e;
     }
-    .stApp { background: #f7faff; }
+    .stApp { background: var(--cream); }
     /* 탭마다 세로 스크롤이 생겼다 사라지며 본문 가로가 달라지지 않게 한다. */
     html {
         scrollbar-gutter: stable;
@@ -184,43 +189,48 @@ st.markdown(
     .brand-mark {
         width: 38px; height: 38px; border-radius: 12px;
         display:flex; align-items:center; justify-content:center;
-        background: linear-gradient(135deg, #2f6fce, #62a5ff);
+        background: linear-gradient(135deg, var(--navy), #31517b);
         color:white; font-size: 1.25rem;
         box-shadow: 0 8px 20px rgba(47,111,206,.25);
     }
     .brand-title { font-size: 1.35rem; font-weight: 800; color: var(--navy); }
     .brand-subtitle { color: var(--muted); font-size: .78rem; margin: .1rem 0 1.2rem 3.05rem; }
     .top-brand {
-        display:flex; align-items:center; gap:.7rem; padding:.2rem 0 .35rem;
+        display:flex; align-items:center; gap:.78rem; padding:.2rem 0 .5rem;
         border-bottom: none; margin-bottom: 0;
     }
     .top-brand-mark {
-        width: 38px; height: 38px; border-radius: 12px;
+        width: 44px; height: 44px;
         display:flex; align-items:center; justify-content:center;
-        background: linear-gradient(135deg, #2f6fce, #62a5ff);
-        color:white; font-size: 1.25rem;
-        box-shadow: 0 8px 20px rgba(47,111,206,.25);
         flex-shrink: 0;
     }
-    .top-brand-title { font-size: 1.12rem; font-weight: 800; color: var(--navy); }
-    .top-brand-subtitle { color: var(--muted); font-size: .78rem; margin-top: .05rem; }
-    .search-panel-title { color: var(--navy); font-size: 1rem; font-weight: 800; margin-bottom: .35rem; }
+    .shield-car-icon { display:block; width:42px; height:46px; }
+    .service-logo-icon { display:block; width:44px; height:44px; object-fit:contain; }
+    .top-brand-title { font-size: 1.18rem; font-weight: 800; letter-spacing: -.025em; color: var(--navy); }
+    .top-brand-subtitle { color: var(--muted); font-size: .82rem; margin-top: .08rem; }
+    .search-panel-title { color: var(--navy); font-size: 1.08rem; font-weight: 800; margin-bottom: .45rem; }
     .hero {
-        padding: .7rem 1.15rem; border-radius: 14px;
-        background: linear-gradient(115deg, #14213d 0%, #24599d 65%, #4d93e8 100%);
-        color: white; margin: .25rem 0 .55rem;
-        box-shadow: 0 10px 24px rgba(37, 82, 145, .14);
+        position: relative; overflow: hidden; min-height: 220px;
+        padding: 1.35rem 1.5rem; border-radius: 18px;
+        color: white; margin: .25rem 0 .7rem;
+        box-shadow: 0 14px 30px rgba(61, 45, 49, .18);
+        border: 1px solid rgba(255, 214, 185, .3);
+        background-color: #0a1b34;
+        background-repeat: no-repeat;
+        background-position: center, center 75%;
+        background-size: 100% 100%, cover;
         width: 100%; box-sizing: border-box;
     }
-    .hero h1 { font-size: 1.12rem; letter-spacing: -.03em; margin: 0 0 .15rem; }
-    .hero p { color: #dbeaff; margin: 0; font-size: .82rem; }
-    .eyebrow { font-size: .68rem; letter-spacing: .12em; color: #9fc7ff; font-weight: 700; margin-bottom: .18rem; }
+    .hero-inner { position: relative; z-index: 1; max-width: 56%; }
+    .hero h1 { font-size: clamp(1.55rem, 2.25vw, 2.25rem); line-height: 1.2; letter-spacing: -.045em; margin: 0 0 .5rem; }
+    .hero p { color: #fff3e9; margin: 0; font-size: .98rem; line-height: 1.6; }
+    .eyebrow { font-size: .7rem; letter-spacing: .13em; color: #ffd19f; font-weight: 800; margin-bottom: .45rem; }
     /* 상단 메뉴를 묶인 버튼형 탭으로 보이게 한다. Streamlit 1.61은 data-selected를 쓴다. */
     [data-testid="stTabs"] [role="tablist"] {
         gap: 4px !important;
-        background: #e8f1ff !important;
+        background: #fff3e7 !important;
         border: 1px solid var(--line) !important;
-        border-radius: 14px !important;
+        border-radius: 15px !important;
         padding: 4px !important;
         width: fit-content !important;
         margin-bottom: .15rem;
@@ -235,7 +245,7 @@ st.markdown(
     [data-testid="stTabs"] [data-testid="stTab"],
     [data-testid="stTabs"] [role="tab"] {
         background: transparent !important;
-        color: #14213d !important;
+        color: var(--navy) !important;
         border: none !important;
         border-radius: 10px !important;
         height: auto !important;
@@ -253,12 +263,12 @@ st.markdown(
     }
     [data-testid="stTabs"] [data-testid="stTab"]:hover,
     [data-testid="stTabs"] [role="tab"]:hover {
-        background: #dceaff !important;
+        background: #ffe3cf !important;
     }
     [data-testid="stTabs"] [data-testid="stTab"][data-selected],
     [data-testid="stTabs"] [role="tab"][data-selected],
     [data-testid="stTabs"] [role="tab"][aria-selected="true"] {
-        background: #14213d !important;
+        background: var(--navy) !important;
         color: #fff !important;
         box-shadow: 0 4px 12px rgba(20, 33, 61, .18);
     }
@@ -277,26 +287,26 @@ st.markdown(
         display: none !important;
         background: transparent !important;
     }
-    .section-title { color: var(--navy); font-size: 1.25rem; font-weight: 800; margin: .2rem 0 .2rem; }
+    .section-title { color: var(--navy); font-size: 1.35rem; font-weight: 800; margin: .2rem 0 .2rem; }
     .section-caption { color: var(--muted); font-size: .9rem; margin: 0 0 .8rem; }
     .card {
         background: #fff; border: 1px solid var(--line); border-radius: 18px;
-        padding: 1.25rem 1.35rem; box-shadow: 0 8px 26px rgba(26, 71, 125, .05);
+        padding: 1.25rem 1.35rem; box-shadow: 0 8px 26px rgba(87, 55, 39, .06);
     }
     .car-card {
         min-height: 180px; border-radius: 18px; overflow: hidden;
-        background: linear-gradient(145deg, #eff5ff, #dceaff);
+        background: linear-gradient(145deg, #fff7ee, #ffe6d1);
         display:flex; align-items:center; justify-content:center;
         border: 1px solid var(--line);
     }
-    .car-placeholder { text-align:center; color:#4d78aa; }
+    .car-placeholder { text-align:center; color:#566987; }
     .car-placeholder .emoji { font-size: 4.1rem; display:block; margin-bottom:.3rem; }
     .metric-label { color: var(--muted); font-size: .82rem; margin-bottom: .25rem; }
     .metric-value { color: var(--navy); font-size: 1.65rem; font-weight: 800; }
     .metric-note { color: var(--muted); font-size: .73rem; margin-top:.25rem; }
     .notice {
-        border-left: 4px solid var(--orange); background: #fff8ef;
-        color: #80501f; padding: .55rem .75rem; border-radius: 10px;
+        border-left: 4px solid var(--orange); background: #fff3e9;
+        color: #75452e; padding: .6rem .8rem; border-radius: 12px;
         font-size: .8rem; line-height: 1.5; margin: .45rem 0 .55rem;
         word-break: keep-all; overflow-wrap: break-word;
     }
@@ -305,31 +315,37 @@ st.markdown(
     .empty-state .emoji { font-size: 3rem; display:block; margin-bottom:.6rem; }
     .market-title { color: var(--navy); font-size: 1.02rem; font-weight: 800; margin: .45rem 0 .4rem; }
     .official-grid { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:.5rem; }
-    .market-grid { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:.5rem; }
+    .market-grid { display:grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap:.5rem; }
     .market-card {
         display:flex; flex-direction:column; align-items:center; justify-content:center;
         min-height:86px; padding:.55rem .4rem; border:1px solid var(--line);
         border-radius:13px; background:#fff; color:var(--navy); text-decoration:none !important;
         transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
     }
-    .official-grid .market-card { min-height:96px; }
-    .market-card:hover { transform:translateY(-2px); border-color:#8bb5ef; box-shadow:0 7px 18px rgba(47,111,206,.12); }
+    .market-card-copy { display:flex; flex-direction:column; align-items:center; min-width:0; }
+    .official-grid .market-card {
+        flex-direction:row; align-items:center; justify-content:center; gap:.68rem;
+        min-height:78px; padding:.62rem .72rem;
+    }
+    .market-card:hover { transform:translateY(-2px); border-color:#efb18a; box-shadow:0 7px 18px rgba(112,65,35,.12); }
     .market-card-disabled { opacity:.55; pointer-events:none; }
     .market-icon {
         width:34px; height:34px; display:flex; align-items:center; justify-content:center;
-        margin-bottom:.3rem; border-radius:9px; background:#eaf2ff; color:#2869c5;
+        margin-bottom:.3rem; border-radius:9px; background:#fff0e4; color:#bd6545;
         font-size:.82rem; font-weight:800; overflow:hidden;
     }
     .market-icon-image { background:#fff; border:1px solid var(--line); }
     .market-icon-image img {
         width:100%; height:100%; object-fit:contain; display:block;
     }
-    .official-grid .market-icon { width:40px; height:40px; }
+    .official-grid .market-icon { flex:0 0 auto; width:40px; height:40px; margin:0; }
     .market-card strong { font-size:.78rem; white-space:nowrap; }
     .official-grid .market-card strong {
-        white-space:normal; word-break:keep-all; text-align:center; line-height:1.25;
+        white-space:normal; word-break:keep-all; text-align:left; line-height:1.25;
     }
     .market-card small { color:var(--muted); font-size:.64rem; margin-top:.12rem; white-space:nowrap; }
+    .official-grid .market-card-copy { align-items:flex-start; }
+    .official-grid .market-card small { white-space:normal; word-break:keep-all; }
     .interest-help { color:var(--muted); font-size:.78rem; margin-top:.15rem; }
     .st-key-interest-register-button button,
     .st-key-interest-register-button-added button {
@@ -345,7 +361,7 @@ st.markdown(
         background: #e9b62d !important; border-color: #c89400 !important;
     }
     div[data-testid="stMetric"] {
-        background: #fff; border: 1px solid var(--line); border-radius: 15px;
+        background: #fffdfb; border: 1px solid var(--line); border-radius: 15px;
         padding: .8rem 1rem;
     }
     div[data-testid="stButton"] > button[kind="primary"] {
@@ -353,29 +369,192 @@ st.markdown(
         font-weight: 700;
     }
     .small-pill {
-        display:inline-block; background:#e9f2ff; color:#2f6fce; border-radius:999px;
+        display:inline-block; background:#fff0e4; color:#bd6545; border-radius:999px;
         padding:.25rem .65rem; font-size:.75rem; font-weight:700; margin-right:.25rem;
     }
     .result-header { margin: .15rem 0 .7rem; }
-    .result-title { color: var(--navy); font-size: 1.28rem; font-weight: 800; margin: 0 0 .4rem; line-height: 1.3; }
+    .result-title {
+        display:flex; align-items:center; gap:.5rem; color: var(--navy); font-size: 1.38rem;
+        font-weight: 800; margin: 0 0 .48rem; line-height: 1.3; letter-spacing:-.035em;
+    }
+    .result-title-icon {
+        display:flex; align-items:center; justify-content:center; width:1.62rem; height:1.62rem;
+        flex:0 0 auto; line-height:0;
+    }
+    .result-title-icon svg {
+        display:block; width:100%; height:100%; overflow:visible;
+        stroke:var(--navy); fill:#fffaf5; stroke-width:1.8;
+    }
     .result-emphasis {
         color: #1f3a68; font-size: .88rem; font-weight: 700; line-height: 1.5;
-        background: #eef5ff; border-left: 4px solid var(--blue);
+        background: #fff2e7; border-left: 4px solid var(--orange);
         padding: .5rem .7rem; border-radius: 8px; margin: 0;
         word-break: keep-all; overflow-wrap: break-word;
     }
-    .st-key-result-top-right .notice { margin: .35rem 0 .4rem; }
-    .st-key-result-top-right .market-title { margin-top: .35rem; }
+    .result-safety-heading {
+        display:flex; align-items:center; min-height:1.62rem; gap:.45rem; color:var(--navy);
+        font-size:1.14rem; font-weight:800; line-height:1.3; margin:.05rem 0 .48rem;
+    }
+    .result-safety-heading svg {
+        display:block; flex:0 0 auto; width:1.5rem; height:1.5rem; overflow:visible;
+        stroke:var(--blue); fill:#eef4ff; stroke-width:1.8;
+    }
+    .result-metrics { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:.6rem; margin:0 0 .62rem; }
+    .result-metric {
+        display:grid; grid-template-columns:2.48rem minmax(0, 1fr); grid-template-rows:auto 1fr;
+        column-gap:.54rem; row-gap:.28rem; min-width:0; min-height:8.25rem;
+        background:linear-gradient(145deg, #fffefd 0%, #fbfcff 100%); border:1px solid var(--line);
+        border-radius:16px; padding:.78rem .7rem .68rem; box-shadow:0 6px 16px rgba(47, 37, 29, .045);
+    }
+    .result-metric-icon {
+        grid-column:1; grid-row:1; display:flex; align-items:center; justify-content:center;
+        width:2.48rem; height:2.48rem; border-radius:50%; background:linear-gradient(145deg, #2854bf, #173c99);
+        box-shadow:0 5px 11px rgba(28, 72, 176, .18);
+    }
+    .result-metric-icon svg { width:1.4rem; height:1.4rem; stroke:#fff; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+    .result-metric-label {
+        grid-column:2; grid-row:1; align-self:center; display:block; color:var(--navy); font-size:.78rem;
+        font-weight:800; line-height:1.28; word-break:keep-all; min-height:0;
+    }
+    .result-metric-value {
+        grid-column:1 / -1; grid-row:2; align-self:end; display:flex; align-items:baseline; gap:.2rem;
+        color:var(--blue); font-weight:800; line-height:1; margin-top:.2rem; letter-spacing:-.05em; white-space:nowrap;
+    }
+    .result-metric-number { font-size:2.18rem; }
+    .result-metric-unit { color:var(--navy); font-size:.92rem; font-weight:700; letter-spacing:-.02em; }
+    .st-key-result-top-right .notice { margin: .1rem 0 .55rem; }
+    .st-key-result-top-right .official-grid { margin-top:.05rem; }
+    .st-key-result-top-right .market-title { margin-top: .68rem; }
     .st-key-result-top-right .source-note { margin-top: .35rem; }
-    .st-key-result-top-left [data-testid="stImage"] img {
-        border-radius: 12px;
+    .result-interpretation {
+        display:grid; grid-template-columns:minmax(11rem, .78fr) minmax(0, 1fr) minmax(0, 1fr);
+        gap:.65rem; align-items:stretch; margin:.8rem 0 .9rem; padding:.72rem;
+        border:1px solid #efcfad; border-radius:18px;
+        background:linear-gradient(105deg, #fff7ee 0%, #fffdf9 48%, #fff8ef 100%);
+        box-shadow:0 8px 20px rgba(111, 69, 35, .055);
     }
-    .quadrant-title { color: var(--navy); font-size: 1.05rem; font-weight: 800; margin: 0 0 .45rem; }
-    .st-key-defect-chart-scroll {
-        overflow-x: auto !important;
-        overflow-y: hidden;
-        padding-bottom: .2rem;
+    .result-interpretation-intro {
+        display:flex; flex-direction:column; justify-content:center; padding:.32rem .52rem .32rem .18rem;
     }
+    .result-interpretation-kicker {
+        display:flex; align-items:center; gap:.38rem; color:#b85b38; font-size:.72rem; font-weight:800;
+        letter-spacing:.02em; margin-bottom:.22rem;
+    }
+    .result-interpretation-kicker svg { width:1.08rem; height:1.08rem; stroke:#c96842; fill:#fffaf5; stroke-width:1.9; }
+    .result-interpretation-title { color:var(--navy); font-size:1rem; font-weight:800; line-height:1.3; word-break:keep-all; }
+    .result-interpretation-caution { color:#9b4d34; font-size:.73rem; font-weight:700; line-height:1.45; margin-top:.3rem; word-break:keep-all; }
+    .result-interpretation-card {
+        display:flex; align-items:center; gap:.56rem; min-width:0; padding:.72rem .72rem .66rem;
+        border:1px solid var(--line); border-radius:13px; background:rgba(255,255,255,.78);
+    }
+    .result-interpretation-icon {
+        flex:0 0 auto; display:flex; align-items:center; justify-content:center; width:2.15rem; height:2.15rem;
+        border-radius:50%; background:#edf3ff;
+    }
+    .result-interpretation-icon svg { width:1.23rem; height:1.23rem; stroke:var(--blue); fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+    .result-interpretation-card-report .result-interpretation-icon { background:#fff0e8; }
+    .result-interpretation-card-report .result-interpretation-icon svg { stroke:#c96842; }
+    .result-interpretation-card strong { display:block; color:var(--navy); font-size:.84rem; line-height:1.28; margin:.04rem 0 .16rem; word-break:keep-all; }
+    .result-interpretation-card p { color:#65708a; font-size:.72rem; line-height:1.45; margin:0; word-break:keep-all; }
+    .vehicle-visual {
+        position:relative; width:100%; overflow:hidden; border-radius:18px;
+        background-color:#e9e1d8; background-position:center; background-size:cover;
+        box-shadow:inset 0 0 0 1px rgba(255,255,255,.24);
+    }
+    .result-vehicle-visual { min-height:clamp(24rem, 31vw, 31rem); }
+    .preview-vehicle-visual { min-height:15rem; border-radius:16px; }
+    .vehicle-visual-overlay {
+        position:absolute; right:0; bottom:0; left:0; padding:1.15rem 1.2rem 1rem;
+        background:linear-gradient(180deg, transparent 0%, rgba(8, 23, 45, .58) 38%, rgba(8, 23, 45, .97) 100%);
+        color:#fff;
+    }
+    .vehicle-visual-brand { display:block; color:#e0eaff; font-size:.8rem; font-weight:700; margin-bottom:.18rem; }
+    .vehicle-visual-title { display:block; color:#fff; font-size:1.42rem; font-weight:800; line-height:1.22; letter-spacing:-.035em; }
+    .preview-vehicle-visual .vehicle-visual-overlay { padding:.88rem 1rem .8rem; }
+    .preview-vehicle-visual .vehicle-visual-title { font-size:1.18rem; }
+    .preview-vehicle-visual .vehicle-visual-brand { font-size:.72rem; }
+    .st-key-interest-register-button,
+    .st-key-interest-register-button-added { width:100% !important; margin-top:.8rem; }
+    .st-key-interest-register-button button,
+    .st-key-interest-register-button-added button {
+        width:100% !important; min-height:3.2rem !important; border-radius:14px !important;
+        font-size:1rem !important; font-weight:800 !important;
+    }
+    .st-key-interest-register-button button {
+        background:#fffefd !important; border-color:#d4ae27 !important; color:var(--navy) !important;
+        box-shadow:0 4px 11px rgba(100, 76, 12, .08);
+    }
+    .st-key-interest-register-button button:hover {
+        background:#fff8dc !important; border-color:#bd970f !important;
+    }
+    .st-key-interest-register-button-added button,
+    .st-key-interest-register-button-added button:disabled {
+        background:#f5c542 !important; border-color:#dca900 !important; color:#4a3500 !important;
+        box-shadow:0 5px 12px rgba(182, 139, 0, .18); opacity:1 !important;
+    }
+    .st-key-interest-register-button button:focus-visible,
+    .st-key-interest-register-button-added button:focus-visible {
+        outline:3px solid rgba(36,92,203,.3) !important; outline-offset:2px !important;
+    }
+    .report-heading { display:flex; align-items:flex-start; gap:.68rem; margin:.05rem 0 .78rem; }
+    .report-heading-icon {
+        display:flex; align-items:center; justify-content:center; flex:0 0 auto;
+        width:2.28rem; height:2.28rem; border-radius:11px; background:#edf3ff;
+    }
+    .report-heading-icon svg {
+        display:block; width:1.52rem; height:1.52rem; stroke:var(--blue); fill:none;
+        stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round;
+    }
+    .report-heading-report .report-heading-icon { background:#fff0e8; }
+    .report-heading-report .report-heading-icon svg { stroke:#d56f48; }
+    .report-heading h3 { color:var(--navy); font-size:1.18rem; font-weight:800; line-height:1.25; margin:0; letter-spacing:-.035em; }
+    .report-heading p { color:#68728a; font-size:.8rem; line-height:1.5; margin:.22rem 0 0; word-break:keep-all; }
+    .report-notice {
+        display:flex; align-items:center; gap:.55rem; padding:.66rem .78rem; margin:.05rem 0 .72rem;
+        border:1px solid #f3c8b8; border-radius:14px; background:linear-gradient(100deg,#fff5f0,#fffbf8);
+        color:#75452e; font-size:.79rem; line-height:1.5; word-break:keep-all;
+    }
+    .report-notice-icon { flex:0 0 auto; color:#d86b45; font-size:1.02rem; font-weight:800; line-height:1.2; }
+    .chart-legend {
+        display:flex; align-items:center; justify-content:center; gap:.45rem; width:max-content; min-width:8.2rem;
+        margin:-.1rem auto .1rem; padding:.34rem .72rem; border:1px solid #eadbcc; border-radius:999px;
+        background:#fffefd; color:var(--navy); font-size:.78rem; font-weight:700;
+    }
+    .chart-legend-swatch { width:.88rem; height:.88rem; border-radius:3px; background:var(--blue); box-shadow:0 2px 5px rgba(36,92,203,.2); }
+    .report-table-wrap { width:100%; overflow:hidden; border:1px solid #eadbcc; border-radius:15px; background:#fffefd; }
+    .report-table { width:100%; border-collapse:separate; border-spacing:0; table-layout:fixed; color:var(--navy); }
+    .report-table th, .report-table td {
+        padding:.72rem .62rem; border-right:1px solid #eee3d8; border-bottom:1px solid #eee3d8;
+        overflow-wrap:anywhere; word-break:keep-all; vertical-align:middle;
+    }
+    .report-table th:last-child, .report-table td:last-child { border-right:0; }
+    .report-table tbody tr:last-child td { border-bottom:0; }
+    .report-table th { background:linear-gradient(180deg,#fbfcff,#f7faff); color:#53627b; font-size:.76rem; font-weight:800; text-align:left; }
+    .report-table td { font-size:.8rem; font-weight:700; line-height:1.45; }
+    .recall-report-table tbody tr:first-child td { background:#eef6ff; }
+    .recall-report-table tbody tr:first-child td:last-child { color:var(--blue); font-weight:800; }
+    .recall-report-table th:nth-child(1) { width:24%; }
+    .recall-report-table th:nth-child(2) { width:36%; }
+    .recall-report-table th:nth-child(3) { width:20%; }
+    .recall-report-table th:nth-child(4) { width:20%; }
+    .st-key-recall-report-panel [data-testid="stExpander"] {
+        border:1px solid #eadbcc !important; border-radius:14px !important; overflow:hidden; background:#fffefd !important;
+        margin-top:.68rem;
+    }
+    .st-key-recall-report-panel [data-testid="stExpander"] summary { padding:.18rem .22rem; }
+    .st-key-recall-report-panel [data-testid="stExpander"] summary p { color:var(--navy) !important; font-size:.88rem !important; }
+    .st-key-defect-report-panel .js-plotly-plot { border-radius:12px; }
+    .comparison-report-intro { margin:.7rem 0 .72rem; color:#68728a; font-size:.84rem; line-height:1.55; }
+    .comparison-report-table th, .comparison-report-table td { text-align:center; padding:.64rem .42rem; }
+    .comparison-report-table th:first-child, .comparison-report-table td:first-child {
+        width:15%; text-align:left; background:#fbfcff; color:var(--navy); font-weight:800;
+    }
+    .comparison-report-table th:not(:first-child), .comparison-report-table td:not(:first-child) { width:auto; }
+    .comparison-report-table th { font-size:.72rem; }
+    .comparison-report-table td { font-size:.76rem; }
+    .comparison-report-table tbody tr:nth-child(4) td:not(:first-child),
+    .comparison-report-table tbody tr:nth-child(5) td:not(:first-child),
+    .comparison-report-table tbody tr:nth-child(6) td:not(:first-child) { color:var(--blue); font-weight:800; white-space:nowrap; }
     /* 시작 공익광고 모달: 화면 중앙에 두고, 확대해도 배너 오른쪽에 빈 칸이 생기지 않게 한다. */
     [data-testid="stDialog"] {
         align-items: center !important;
@@ -387,7 +566,6 @@ st.markdown(
         inset: 0 !important;
     }
     [data-testid="stDialog"]:has(.st-key-public-ad-dialog) > div {
-        /* 배너 비율(1086x1448)에 맞춰 너비를 줄인다. 바깥 오버레이는 건드리지 않는다. */
         width: min(31.25rem, calc((100dvh - 5.8rem) * 1086 / 1448)) !important;
         min-width: 0 !important;
         max-width: calc(100vw - 0.8rem) !important;
@@ -396,12 +574,23 @@ st.markdown(
         overflow: hidden !important;
     }
     [data-testid="stDialog"]:has(.st-key-compare-preview-dialog) > div {
-        width: min(31.25rem, calc(100vw - 0.8rem)) !important;
+        width: min(38rem, calc(100vw - 1.2rem)) !important;
         min-width: 0 !important;
-        max-width: calc(100vw - 0.8rem) !important;
+        max-width: calc(100vw - 1.2rem) !important;
         margin: 0 !important;
         max-height: calc(100dvh - 0.8rem) !important;
         overflow-y: auto !important;
+    }
+    [data-testid="stDialog"]:has(.st-key-compare-preview-dialog) [slot="title"] {
+        color: var(--navy) !important; font-size: 1.68rem !important;
+        font-weight: 800 !important; letter-spacing: -.04em;
+        padding: .85rem 3.25rem .55rem 1.15rem !important;
+    }
+    [data-testid="stDialog"]:has(.st-key-compare-preview-dialog) button[aria-label="Close"] {
+        top: .7rem !important; right: .9rem !important; transform: scale(1.15);
+    }
+    [data-testid="stDialog"]:has(.st-key-compare-preview-dialog) [slot="title"] + div {
+        padding: 0 1.15rem 1.05rem !important;
     }
     [data-testid="stDialog"] [slot="title"] {
         font-size: 0.95rem !important;
@@ -440,12 +629,22 @@ st.markdown(
         display: flex !important;
         justify-content: center !important;
         width: 100% !important;
-        background: linear-gradient(145deg, #eef5ff, #e4edfa);
-        border: 1px solid var(--line);
-        border-radius: 16px;
-        padding: 0.35rem;
-        margin: 0 0 0.15rem;
+        background: #10213d;
+        border: 0;
+        border-radius: 16px 16px 0 0;
+        padding: 0;
+        margin: 0;
+        overflow: hidden;
         box-sizing: border-box;
+    }
+    /* Streamlit 이미지 래퍼가 원본 사진 폭으로 줄어드는 경우를 막는다. */
+    .st-key-compare-preview-dialog [data-testid="stElementContainer"]:has([data-testid="stImage"]),
+    .st-key-compare-preview-dialog [data-testid="stFullScreenFrame"],
+    .st-key-compare-preview-dialog [data-testid="stFullScreenFrame"] > div,
+    .st-key-compare-preview-dialog [data-testid="stImage"],
+    .st-key-compare-preview-dialog [data-testid="stImage"] [data-testid="stImageContainer"] {
+        width: 100% !important;
+        align-self: stretch !important;
     }
     [data-testid="stDialog"]:has(.st-key-compare-preview-dialog) [data-testid="stImage"] > div,
     [data-testid="stDialog"]:has(.st-key-compare-preview-dialog) [data-testid="stImage"] [data-testid="stImageContainer"] {
@@ -457,40 +656,126 @@ st.markdown(
         display: block;
         width: 100% !important;
         max-width: 100% !important;
-        height: auto !important;
-        max-height: none !important;
+        height: 15rem !important;
+        max-height: 15rem !important;
         margin: 0 auto;
-        object-fit: contain;
-        border-radius: 10px;
+        object-fit: cover;
+        border-radius: 0;
     }
     .st-key-compare-preview-dialog .car-card {
-        min-height: 9rem;
+        min-height: 15rem;
         width: 100%;
         margin: 0 auto;
+        border-radius: 16px 16px 0 0;
     }
-    .st-key-compare-preview-dialog .preview-kicker {
-        color: var(--muted); font-size: .72rem; font-weight: 700;
-        letter-spacing: .04em; text-align: center; margin: 0 0 .15rem;
+    .preview-identity {
+        background: linear-gradient(110deg, #10213d, #193761);
+        color: #fff; padding: .9rem 1.05rem .98rem; border-radius: 0 0 18px 18px;
+        margin: 0 0 .85rem;
     }
-    .st-key-compare-preview-dialog .result-title {
-        text-align: center; font-size: 1.08rem; margin: 0 0 .55rem;
+    .preview-identity-brand {
+        display: block; color: #cbdcff; font-size: .72rem; font-weight: 700;
+        letter-spacing: .04em; margin-bottom: .1rem;
+    }
+    .preview-identity-title {
+        color: #fff; font-size: 1.3rem; font-weight: 800; line-height: 1.25;
+        letter-spacing: -.025em;
+    }
+    .preview-safety-callout {
+        display: flex; gap: .82rem; align-items: center;
+        background: linear-gradient(100deg, #fff9f4, #fff4ec);
+        border: 1px solid #f5d6c7; border-radius: 15px; padding: .78rem .9rem;
+        margin: 0 0 .85rem; color: #a94f39;
+    }
+    .preview-safety-badge {
+        flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
+        width: 2.65rem; height: 2.65rem;
+    }
+    .preview-safety-badge svg {
+        width: 100%; height: 100%; stroke: #df7257; fill: #fff8f2;
+    }
+    .preview-safety-title {
+        display: block; color: #ce644c; font-size: .94rem; font-weight: 800;
+        line-height: 1.3; margin-bottom: .08rem;
+    }
+    .preview-safety-copy {
+        display: block; color: #78655d; font-size: .78rem; line-height: 1.4;
+        word-break: keep-all;
     }
     .preview-metrics {
         display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: .4rem; margin: .15rem 0 .2rem;
+        gap: 0; margin: 0 0 .85rem; border: 1px solid var(--line);
+        border-radius: 16px; overflow: hidden; background: #fffdfb;
     }
     .preview-metric {
-        background: #f7faff; border: 1px solid var(--line); border-radius: 10px;
-        padding: .38rem .3rem .42rem; text-align: center;
+        background: #fffdfb; padding: .8rem .32rem .75rem; text-align: center;
+        min-width: 0;
+    }
+    .preview-metric + .preview-metric {
+        border-left: 1px solid var(--line);
     }
     .preview-metric-label {
-        display: block; color: var(--muted); font-size: .62rem; font-weight: 700;
-        line-height: 1.25; word-break: keep-all; margin-bottom: .12rem;
+        display: block; color: var(--navy); font-size: .72rem; font-weight: 800;
+        line-height: 1.25; word-break: keep-all; margin-bottom: .14rem;
+    }
+    .preview-metric-context {
+        display: none;
+    }
+    .preview-metric-icon {
+        width: 2.55rem; height: 2.55rem; border-radius: 50%; margin: 0 auto .45rem;
+        display: flex; align-items: center; justify-content: center; background: #fbf1e4;
+    }
+    .preview-metric-icon svg {
+        width: 1.45rem; height: 1.45rem; stroke: var(--navy); fill: none;
+        stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
     }
     .preview-metric-value {
-        display: block; color: var(--navy); font-size: .92rem; font-weight: 800;
+        display: block; color: var(--blue); font-size: 1.52rem; font-weight: 800;
         line-height: 1.2;
     }
+    .st-key-compare-register-button,
+    .st-key-compare-register-button-added {
+        margin-top: .05rem;
+    }
+    .st-key-compare-register-button button,
+    .st-key-compare-register-button-added button {
+        width: 100% !important; min-height: 3.25rem !important; border-radius: 14px !important;
+        font-size: 1.12rem !important; font-weight: 800 !important;
+    }
+    .st-key-compare-register-button button {
+        background:#fffefd !important; border-color:#d4ae27 !important; color:var(--navy) !important;
+        box-shadow:0 4px 11px rgba(100, 76, 12, .08);
+    }
+    .st-key-compare-register-button button:hover {
+        background:#fff8dc !important; border-color:#bd970f !important;
+    }
+    .st-key-compare-register-button-added button,
+    .st-key-compare-register-button-added button:disabled {
+        background: #f5c542 !important; border-color: #dca900 !important; color: #4a3500 !important;
+        box-shadow:0 5px 12px rgba(182, 139, 0, .18); opacity: 1 !important;
+    }
+    .st-key-compare-list-link {
+        display: flex !important; justify-content: center !important; margin-top: -.25rem;
+    }
+    .st-key-compare-list-link button {
+        border: 0 !important; background: transparent !important; color: var(--navy) !important;
+        text-decoration: underline !important; font-size: .85rem !important; font-weight: 700 !important;
+        min-height: 2rem !important; padding: .25rem .5rem !important;
+    }
+    .public-ad-card {
+        background: linear-gradient(145deg, #10213d 0%, #1d345a 55%, #b85f4f 155%);
+        border-radius: 18px; overflow: hidden; color: #fff; padding: 1.35rem;
+        box-shadow: 0 12px 28px rgba(16, 33, 61, .22);
+    }
+    .public-ad-top { display:flex; align-items:center; gap:.8rem; margin-bottom: 1.15rem; }
+    .public-ad-icon { width:46px; height:50px; flex: 0 0 auto; }
+    .public-ad-eyebrow { color:#ffd0a3; font-size:.72rem; letter-spacing:.12em; font-weight:800; }
+    .public-ad-title { font-size:1.48rem; line-height:1.25; letter-spacing:-.04em; margin:.2rem 0 .45rem; }
+    .public-ad-copy { color:#fff1e4; font-size:.93rem; line-height:1.65; margin:0; }
+    .public-ad-points { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:.6rem; margin-top:1.15rem; }
+    .public-ad-point { background:rgba(255,255,255,.11); border:1px solid rgba(255,223,199,.28); border-radius:13px; padding:.8rem; }
+    .public-ad-point strong { display:block; color:#fff; font-size:.92rem; margin-bottom:.2rem; }
+    .public-ad-point span { color:#ffe9d9; font-size:.77rem; line-height:1.45; }
     [data-testid="stDialog"] [data-testid="stCheckbox"] {
         display: flex;
         justify-content: flex-end;
@@ -556,7 +841,7 @@ st.markdown(
     }
     .interest-item-photo {
         width: 76px; height: 50px; object-fit: cover; border-radius: 8px;
-        flex-shrink: 0; background: #eef5ff; border: 1px solid var(--line);
+        flex-shrink: 0; background: #fff2e7; border: 1px solid var(--line);
     }
     .interest-item-photo-empty {
         display: flex; align-items: center; justify-content: center; font-size: 1.15rem;
@@ -568,23 +853,24 @@ st.markdown(
         font-size: 0.82rem !important;
         font-weight: 700 !important;
     }
-    .st-key-compare-register-button,
-    .st-key-compare-register-button-added {
-        display: flex;
-        justify-content: center;
-        margin-top: .15rem;
-    }
-    .st-key-compare-register-button button,
-    .st-key-compare-register-button-added button {
-        min-width: 11.5rem !important;
-        min-height: 2.15rem !important;
-        padding: 0.25rem 1.1rem !important;
-        font-size: 0.86rem !important;
-        border-radius: 999px !important;
-    }
-    .st-key-compare-register-button-added button {
-        background: #f5c542 !important; border-color: #dca900 !important; color: #4a3500 !important;
-        font-weight: 800 !important;
+    @media (max-width: 720px) {
+        .block-container { padding-top: 3.6rem !important; }
+        .hero { min-height: 200px; padding: 1.2rem 1.1rem; }
+        .hero-inner { max-width: 78%; }
+        .hero h1 { font-size: 1.45rem; }
+        .hero p { font-size: .9rem; }
+        [data-testid="stTabs"] { margin-top: 0 !important; }
+        [data-testid="stTabs"] [role="tablist"] { margin-right: 0; width:100% !important; }
+        [data-testid="stTabs"] [role="tab"] { flex:1; justify-content:center; padding:.45rem .35rem !important; }
+        .public-ad-points { grid-template-columns:1fr; }
+        .result-interpretation { grid-template-columns:1fr; gap:.48rem; padding:.7rem; }
+        .result-interpretation-intro { padding:.12rem .16rem .3rem; }
+        .result-interpretation-card { padding:.64rem .68rem; }
+        .report-heading h3 { font-size:1.06rem; }
+        .report-table th, .report-table td { padding:.58rem .42rem; font-size:.72rem; word-break:break-all; }
+        .comparison-report-table th { font-size:.64rem; }
+        .comparison-report-table td { font-size:.67rem; }
+        .comparison-report-table th:first-child, .comparison-report-table td:first-child { width:18%; }
     }
     [data-testid="stHtml"] {
         display: none !important;
@@ -730,6 +1016,17 @@ def image_file_to_data_uri(path: Path) -> str:
     return f"data:{mime};base64,{encoded}"
 
 
+def shield_car_icon_html(class_name: str = "service-logo-icon") -> str:
+    """공통 헤더에 표시할 서비스 로고를 반환한다."""
+    logo_uri = image_file_to_data_uri(SERVICE_LOGO_PATH)
+    if logo_uri:
+        return (
+            f"<img class='{html.escape(class_name, quote=True)}' src='{logo_uri}' "
+            "alt='자동차 리콜·결함 조회 서비스 로고'>"
+        )
+    return ""
+
+
 def brand_icon_html(relative_stem: str, fallback: str) -> str:
     """로고 파일이 있으면 이미지로, 없으면 글자 아이콘으로 표시한다."""
     uri = file_to_data_uri(resolve_icon_path(relative_stem))
@@ -744,8 +1041,9 @@ def brand_icon_html(relative_stem: str, fallback: str) -> str:
 def link_card_html(title: str, description: str, url: str | None, icon_html: str) -> str:
     """중고차·공식 사이트 이동용 카드 HTML을 만든다."""
     inner = (
-        f"{icon_html}<strong>{html.escape(title)}</strong>"
-        f"<small>{html.escape(description)}</small>"
+        f"{icon_html}<span class='market-card-copy'>"
+        f"<strong>{html.escape(title)}</strong>"
+        f"<small>{html.escape(description)}</small></span>"
     )
     if url:
         return (
@@ -908,9 +1206,9 @@ if "public_ad_open" not in st.session_state:
 def render_site_header() -> None:
     """앱 전체에서 공통으로 보이는 서비스 제목을 표시한다."""
     st.markdown(
-        """
+        f"""
         <div class="top-brand">
-          <div class="top-brand-mark">🚘</div>
+          <div class="top-brand-mark">{shield_car_icon_html()}</div>
           <div>
             <div class="top-brand-title">자동차 리콜·결함 조회 서비스</div>
             <div class="top-brand-subtitle">중고차 구매 전 리콜 이력과 소유자 결함 신고를 확인하세요.</div>
@@ -923,12 +1221,23 @@ def render_site_header() -> None:
 
 def render_hero() -> None:
     """현재 페이지의 공통 안내 배너를 표시한다."""
+    hero_uri = image_file_to_data_uri(HERO_IMAGE_PATH)
+    hero_style = (
+        "background-image: linear-gradient(90deg, rgba(10, 27, 52, .98) 0%, "
+        "rgba(10, 27, 52, .94) 22%, rgba(10, 27, 52, .72) 43%, "
+        "rgba(10, 27, 52, .34) 61%, rgba(10, 27, 52, .08) 80%, transparent 100%), "
+        f"url('{hero_uri}');"
+        if hero_uri
+        else "background: linear-gradient(115deg, #10213d 0%, #473d54 65%, #e98666 100%);"
+    )
     st.markdown(
-        """
-        <div class="hero">
-          <div class="eyebrow">USED CAR SAFETY CHECK</div>
-          <h1>중고차 구매 전, 리콜과 결함을 한눈에</h1>
-          <p>제조사가 진행한 공식 리콜과 소유자가 접수한 결함 신고를 구분해 확인하세요.</p>
+        f"""
+        <div class="hero" style="{hero_style}">
+          <div class="hero-inner">
+            <div class="eyebrow">USED CAR SAFETY CHECK</div>
+            <h1>중고차 구매 전, 리콜과 결함을 한눈에</h1>
+            <p>가족과 함께할 차, 더 안심하고 골라보세요.</p>
+          </div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -987,7 +1296,7 @@ def persist_hide_public_ad_today() -> None:
 
 
 @st.dialog(
-    "자동차 리콜 안전 안내",
+    "차량 안전 안내",
     width="small",
     dismissible=True,
     on_dismiss=dismiss_public_ad,
@@ -1073,14 +1382,40 @@ def dismiss_compare_preview() -> None:
     st.session_state.compare_preview = None
 
 
+def preview_icon_svg(icon_name: str) -> str:
+    """비교 차량 미리보기의 안내·지표용 선형 아이콘을 반환한다."""
+    paths = {
+        "shield": (
+            '<path d="M12 2.5 21 5.6v7c0 5.3-3.4 9.7-9 12.1-5.6-2.4-9-6.8-9-12.1v-7L12 2.5Z"/>'
+            '<path d="m8.2 13 2.4 2.4 5.3-5.5"/>'
+        ),
+        "report": (
+            '<path d="M7 3.5h8.5L20 8v12.5H7z"/><path d="M15.5 3.5V8H20"/>'
+            '<path d="M10 11h5.5M10 14.5h4"/><circle cx="17.8" cy="17.8" r="3.2"/><path d="m20.1 20.1 1.9 1.9"/>'
+        ),
+        "bell": (
+            '<path d="M6 17.5h12l-1.5-2.2v-4.7a4.5 4.5 0 0 0-9 0v4.7z"/>'
+            '<path d="M10 21h4M12 3v1.4"/>'
+        ),
+        "people": (
+            '<circle cx="12" cy="8.2" r="3.2"/><path d="M5.4 21v-1.6a5.5 5.5 0 0 1 5.5-5.5h2.2a5.5 5.5 0 0 1 5.5 5.5V21"/>'
+            '<path d="M4.4 8.8a2.6 2.6 0 0 1 2-2.5M19.6 8.8a2.6 2.6 0 0 0-2-2.5M2.5 20v-1.2a4.2 4.2 0 0 1 2.7-3.9M21.5 20v-1.2a4.2 4.2 0 0 0-2.7-3.9"/>'
+        ),
+    }
+    return (
+        '<svg viewBox="-1 -1 26 26" aria-hidden="true" focusable="false">'
+        f"{paths[icon_name]}</svg>"
+    )
+
+
 @st.dialog(
-    "차종 조회",
+    "비교 차량 미리보기",
     width="small",
     dismissible=True,
     on_dismiss=dismiss_compare_preview,
 )
 def render_compare_preview_dialog() -> None:
-    """비교할 차종의 사진과 요약 숫자를 배너 크기의 팝업으로 보여준다."""
+    """비교할 차종의 사진과 안전 요약을 사진 중심 팝업으로 보여준다."""
     preview = st.session_state.get("compare_preview")
     if not preview:
         return
@@ -1096,40 +1431,51 @@ def render_compare_preview_dialog() -> None:
     year_text = "전체 연식" if year == "전체 연식" else f"{year}년형"
 
     with st.container(key="compare-preview-dialog", gap="small"):
-        st.markdown(
-            f"<div class='preview-kicker'>{html.escape(manufacturer)}</div>"
-            f"<div class='result-title'>{html.escape(model_name)} · {html.escape(year_text)}</div>",
-            unsafe_allow_html=True,
+        render_vehicle_visual_overlay(
+            manufacturer,
+            model_name,
+            year_text,
+            "preview-vehicle-visual",
         )
-        render_car_visual(manufacturer, model_name)
         if metrics is None:
             st.warning("선택한 차종의 요약 정보를 찾지 못했습니다.")
         else:
             year_label, complaint_count, recall_count, affected_sum = metrics
             st.markdown(
+                "<div class='preview-safety-callout'>"
+                f"<span class='preview-safety-badge'>{preview_icon_svg('shield')}</span>"
+                "<div><span class='preview-safety-title'>구매 전 안전 정보를 함께 살펴보세요</span>"
+                "<span class='preview-safety-copy'>결함 신고는 리콜 확정 여부와 다를 수 있어요.</span></div>"
+                "</div>"
                 "<div class='preview-metrics'>"
                 f"<div class='preview-metric' title='{html.escape(complaint_count_help(year), quote=True)}'>"
-                f"<span class='preview-metric-label'>{html.escape(year_label)}</span>"
-                f"<strong class='preview-metric-value'>{html.escape(format_number(complaint_count))}</strong>"
+                f"<span class='preview-metric-icon'>{preview_icon_svg('report')}</span>"
+                "<span class='preview-metric-label'>소비자 결함 신고</span>"
+                f"<span class='preview-metric-context'>{html.escape(year_label)}</span>"
+                f"<strong class='preview-metric-value'>{html.escape(format_number(complaint_count))}건</strong>"
                 "</div>"
                 "<div class='preview-metric'>"
+                f"<span class='preview-metric-icon'>{preview_icon_svg('bell')}</span>"
                 "<span class='preview-metric-label'>공식 리콜 기록</span>"
+                "<span class='preview-metric-context'>제조사 안전 조치</span>"
                 f"<strong class='preview-metric-value'>{html.escape(format_number(recall_count))}건</strong>"
                 "</div>"
                 "<div class='preview-metric'>"
+                f"<span class='preview-metric-icon'>{preview_icon_svg('people')}</span>"
                 "<span class='preview-metric-label'>리콜 대상 대수</span>"
+                "<span class='preview-metric-context'>공식 리콜 기준</span>"
                 f"<strong class='preview-metric-value'>{html.escape(format_number(affected_sum))}대</strong>"
                 "</div></div>",
                 unsafe_allow_html=True,
             )
         button_key = "compare-register-button-added" if is_registered else "compare-register-button"
         button_label = "비교차량 등록됨" if is_registered else "비교차량 등록"
-        with st.container(key=button_key, horizontal=True, horizontal_alignment="center"):
+        with st.container(key=button_key):
             if st.button(
                 button_label,
                 key="add_compare_car",
                 icon=":material/star:",
-                width="content",
+                width="stretch",
                 disabled=is_registered,
             ):
                 added, message = add_interest_car(preview)
@@ -1138,6 +1484,16 @@ def render_compare_preview_dialog() -> None:
                     st.rerun()
                 else:
                     st.warning(message)
+        if is_registered:
+            with st.container(key="compare-list-link"):
+                if st.button(
+                    "비교 목록 확인하기",
+                    key="open_compare_list",
+                    type="secondary",
+                    width="stretch",
+                ):
+                    st.session_state.compare_preview = None
+                    st.rerun()
 
 
 def render_empty() -> None:
@@ -1263,14 +1619,70 @@ def render_recall_search() -> None:
         st.markdown(
             "<div class='source-note'>공식 리콜과 소유자 결함신고를 분리해서 보여드립니다. "
             "신고 건수는 리콜 확정 건수가 아닙니다.</div>",
-            unsafe_allow_html=True,
-        )
+        unsafe_allow_html=True,
+    )
+
+
+def render_vehicle_visual_overlay(
+    manufacturer: str,
+    model: str,
+    year_text: str,
+    variant: str,
+) -> None:
+    """차량 사진 하단에 제조사·차종 정보를 겹쳐 표시한다."""
+    image_path = find_car_image(manufacturer, model)
+    if image_path:
+        image_uri = image_file_to_data_uri(image_path)
+        if image_uri:
+            st.markdown(
+                f"<div class='vehicle-visual {html.escape(variant, quote=True)}' "
+                f"style=\"background-image:url('{image_uri}');\">"
+                "<div class='vehicle-visual-overlay'>"
+                f"<span class='vehicle-visual-brand'>{html.escape(manufacturer)}</span>"
+                f"<span class='vehicle-visual-title'>{html.escape(model)} · {html.escape(year_text)}</span>"
+                "</div></div>",
+                unsafe_allow_html=True,
+            )
+            return
+    render_car_visual(manufacturer, model)
+
+
+def report_heading_html(title: str, description: str, icon_name: str, tone: str = "blue") -> str:
+    """조회·비교 화면에서 재사용하는 리포트형 섹션 제목을 만든다."""
+    tone_class = " report-heading-report" if tone == "coral" else ""
+    return (
+        f"<div class='report-heading{tone_class}'>"
+        f"<span class='report-heading-icon'>{preview_icon_svg(icon_name)}</span>"
+        "<div>"
+        f"<h3>{html.escape(title)}</h3>"
+        f"<p>{html.escape(description)}</p>"
+        "</div></div>"
+    )
+
+
+def report_table_html(data: pd.DataFrame, table_class: str) -> str:
+    """가로 스크롤 없이 셀 너비를 배분하는 읽기 전용 리포트 표를 만든다."""
+    headers = "".join(f"<th scope='col'>{html.escape(str(column))}</th>" for column in data.columns)
+    rows: list[str] = []
+    for _, row in data.iterrows():
+        cells = "".join(f"<td>{html.escape(str(value))}</td>" for value in row)
+        rows.append(f"<tr>{cells}</tr>")
+    return (
+        f"<div class='report-table-wrap'><table class='report-table {html.escape(table_class, quote=True)}'>"
+        f"<thead><tr>{headers}</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+    )
 
 
 def render_recall_history(model_id: int) -> None:
     """공식 리콜 이력 표와 리콜 사유 펼쳐보기를 표시한다."""
-    st.markdown('<div class="quadrant-title">공식 리콜 이력</div>', unsafe_allow_html=True)
-    st.caption("생산기간, 리콜 개시일, 대상 대수와 리콜 사유를 확인합니다.")
+    st.markdown(
+        report_heading_html(
+            "공식 리콜 이력",
+            "생산기간, 리콜 개시일, 대상 대수와 리콜 사유를 확인합니다.",
+            "report",
+        ),
+        unsafe_allow_html=True,
+    )
     recalls = read_query(RECALLS_SQL, {"model_id": model_id})
     if recalls.empty:
         st.info("등록된 공식 리콜 기록이 없습니다.")
@@ -1283,15 +1695,10 @@ def render_recall_history(model_id: int) -> None:
     )
     display_recalls["리콜 개시일"] = display_recalls["recall_start_date"].map(format_date)
     display_recalls["대상 대수"] = display_recalls["affected_count"].map(lambda x: f"{format_number(x)}대")
-    st.dataframe(
-        display_recalls[["raw_model_name", "생산기간", "리콜 개시일", "대상 대수"]].rename(
-            columns={"raw_model_name": "원본 차명"}
-        ),
-        width="stretch",
-        hide_index=True,
-        height=220,
-        column_config={"원본 차명": st.column_config.TextColumn(width="medium")},
+    recall_table = display_recalls[["raw_model_name", "생산기간", "리콜 개시일", "대상 대수"]].rename(
+        columns={"raw_model_name": "원본 차명"}
     )
+    st.markdown(report_table_html(recall_table, "recall-report-table"), unsafe_allow_html=True)
     for _, recall in recalls.iterrows():
         title = f"{format_date(recall['recall_start_date'])} · {recall['raw_model_name']}"
         with st.expander(title):
@@ -1304,10 +1711,20 @@ def render_recall_history(model_id: int) -> None:
 
 def render_defect_reports(model_id: int, year: object, complaint_count: int) -> None:
     """소유자 결함 신고 안내와 연도별 막대그래프를 표시한다."""
-    st.markdown('<div class="quadrant-title">소유자 결함 신고</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="notice">신고 건수는 소유자가 접수한 기록의 개수입니다.<br>'
-        "결함 확정이나 리콜 대상 판정을 의미하지 않으며, 판매량을 반영한 비교가 아닙니다.</div>",
+        report_heading_html(
+            "소유자 결함 신고",
+            "연식별 신고 흐름을 구매 전 참고 정보로 확인합니다.",
+            "report",
+            tone="coral",
+        ),
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "<div class='report-notice'><span class='report-notice-icon'>!</span><span>"
+        "신고 건수는 소유자가 접수한 기록입니다.<br>"
+        "리콜 확정·대상 판정과 다를 수 있으며, 판매량을 반영한 비교가 아닙니다."
+        "</span></div>",
         unsafe_allow_html=True,
     )
     defect_by_year = read_query(DEFECT_BY_YEAR_SQL, {"model_id": model_id})
@@ -1319,31 +1736,39 @@ def render_defect_reports(model_id: int, year: object, complaint_count: int) -> 
     chart_data["model_year"] = chart_data["model_year"].astype(int)
     chart_data = chart_data.sort_values("model_year")
     chart_data["year_label"] = chart_data["model_year"].map(lambda value: f"{int(value) % 100:02d}")
-    year_count = len(chart_data)
-    visible_years = 10
-    bar_width_px = 68
-    chart_width = max(visible_years, year_count) * bar_width_px
+    # 숫자로만 된 범주(예: "06")는 Plotly 주석에서 연속형 좌표로 해석될 수 있다.
+    # 내부 키를 문자 범주로 분리하고, 눈에는 기존처럼 두 자리 연도만 표시한다.
+    chart_data["year_axis"] = chart_data["model_year"].map(lambda value: f"year-{int(value)}")
 
     chart = px.bar(
         chart_data,
-        x="year_label",
+        x="year_axis",
         y="complaint_count",
-        labels={"year_label": "연도", "complaint_count": "신고 건수"},
-        color_discrete_sequence=["#4b8fe8"],
+        labels={"year_axis": "연도", "complaint_count": "신고 건수"},
+        color_discrete_sequence=["#245ccb"],
     )
     chart.update_layout(
-        height=280,
-        width=chart_width,
-        autosize=False,
-        margin=dict(l=10, r=10, t=20, b=10),
+        height=320,
+        autosize=True,
+        margin=dict(l=12, r=12, t=24, b=18),
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
-        bargap=0.35,
+        bargap=0.42,
+        font=dict(color="#53627b", family="Pretendard, Noto Sans KR, sans-serif"),
+        showlegend=False,
     )
-    chart.update_xaxes(type="category", tickangle=0, fixedrange=False)
-    if year_count > visible_years:
-        start = year_count - visible_years
-        chart.update_xaxes(range=[start - 0.5, year_count - 0.5])
+    chart.update_xaxes(
+        type="category",
+        categoryorder="array",
+        categoryarray=chart_data["year_axis"].tolist(),
+        tickmode="array",
+        tickvals=chart_data["year_axis"].tolist(),
+        ticktext=chart_data["year_label"].tolist(),
+        tickangle=0,
+        fixedrange=True,
+        title=None,
+        showgrid=False,
+    )
     max_count = int(chart_data["complaint_count"].max())
     chart.update_yaxes(
         rangemode="tozero",
@@ -1351,10 +1776,38 @@ def render_defect_reports(model_id: int, year: object, complaint_count: int) -> 
         dtick=1 if max_count <= 10 else None,
         tickformat=",d",
         fixedrange=True,
+        gridcolor="#e7edf7",
+        zeroline=False,
     )
-    chart.update_traces(width=0.55)
-    with st.container(key="defect-chart-scroll"):
-        st.plotly_chart(chart, width=chart_width, config={"displayModeBar": False, "scrollZoom": False})
+    chart.update_traces(
+        width=0.55,
+        marker_line_width=0,
+        name="신고 건수",
+        customdata=chart_data[["year_label"]],
+        hovertemplate="연식 %{customdata[0]}<br>신고 %{y:,}건<extra></extra>",
+    )
+    peak = chart_data.loc[chart_data["complaint_count"].idxmax()]
+    chart.add_annotation(
+        x=peak["year_axis"],
+        y=int(peak["complaint_count"]),
+        text=f"최고 {format_number(peak['complaint_count'])}건<br>({int(peak['model_year'])}년형)",
+        showarrow=True,
+        arrowhead=0,
+        arrowcolor="#df8e68",
+        ax=42,
+        ay=-34,
+        bgcolor="#fff8f3",
+        bordercolor="#f0b79f",
+        borderwidth=1,
+        borderpad=5,
+        font=dict(color="#c7633d", size=11),
+        align="left",
+    )
+    st.plotly_chart(chart, width="stretch", config={"displayModeBar": False, "scrollZoom": False})
+    st.markdown(
+        "<div class='chart-legend'><span class='chart-legend-swatch'></span><span>신고 건수</span></div>",
+        unsafe_allow_html=True,
+    )
     if year != "전체 연식":
         st.info(f"현재 선택: {year}년형 · 신고 {format_number(complaint_count)}건")
 
@@ -1379,10 +1832,12 @@ def render_dashboard() -> None:
         car_identity(car) == car_identity(search)
         for car in st.session_state.get("interest_cars", [])
     )
+    year_text = "전체 연식" if year == "전체 연식" else f"{year}년형"
 
     st.markdown(
         f"<div class='result-header'>"
-        f"<div class='result-title'>{html.escape(model_name)} 리콜/결함 요약</div>"
+        f"<div class='result-title'><span class='result-title-icon'>{preview_icon_svg('shield')}</span>"
+        f"{html.escape(model_name)} 리콜/결함 요약</div>"
         "<div class='result-emphasis'>"
         "공식 리콜과 소유자 결함신고를 분리해서 보여드립니다. "
         "신고 건수는 리콜 확정 건수가 아닙니다."
@@ -1398,19 +1853,20 @@ def render_dashboard() -> None:
             key="result-top-left",
             gap="small",
         ):
-            render_car_visual(manufacturer, model_name)
+            render_vehicle_visual_overlay(
+                manufacturer,
+                model_name,
+                year_text,
+                "result-vehicle-visual",
+            )
             button_key = "interest-register-button-added" if is_registered else "interest-register-button"
             button_label = "관심 차량 등록됨" if is_registered else "관심 차량 등록"
-            with st.container(
-                key=button_key,
-                horizontal=True,
-                horizontal_alignment="center",
-            ):
+            with st.container(key=button_key):
                 if st.button(
                     button_label,
                     key="add_interest_car",
                     icon=":material/star:",
-                    width="content",
+                    width="stretch",
                     disabled=is_registered,
                 ):
                     added, message = add_interest_car(search)
@@ -1426,13 +1882,28 @@ def render_dashboard() -> None:
             key="result-top-right",
             gap="small",
         ):
-            metric_cols = st.columns(3)
-            with metric_cols[0]:
-                st.metric(year_label, format_number(complaint_count), help=complaint_count_help(year))
-            with metric_cols[1]:
-                st.metric("공식 리콜 기록", f"{format_number(recall_count)}건")
-            with metric_cols[2]:
-                st.metric("리콜 대상 대수 합계", f"{format_number(affected_sum)}대")
+            st.markdown(
+                "<div class='result-safety-heading'>"
+                f"{preview_icon_svg('shield')}<span>구매 전 안전 요약</span></div>"
+                "<div class='result-metrics'>"
+                f"<div class='result-metric' title='{html.escape(complaint_count_help(year), quote=True)}'>"
+                f"<span class='result-metric-icon'>{preview_icon_svg('report')}</span>"
+                "<span class='result-metric-label'>누적 소비자 결함 신고수</span>"
+                f"<strong class='result-metric-value'><span class='result-metric-number'>{html.escape(format_number(complaint_count))}</span>"
+                "<span class='result-metric-unit'>건</span></strong></div>"
+                "<div class='result-metric'>"
+                f"<span class='result-metric-icon'>{preview_icon_svg('bell')}</span>"
+                "<span class='result-metric-label'>공식 리콜 기록</span>"
+                f"<strong class='result-metric-value'><span class='result-metric-number'>{html.escape(format_number(recall_count))}</span>"
+                "<span class='result-metric-unit'>건</span></strong></div>"
+                "<div class='result-metric'>"
+                f"<span class='result-metric-icon'>{preview_icon_svg('people')}</span>"
+                "<span class='result-metric-label'>리콜 대상 대수 합계</span>"
+                f"<strong class='result-metric-value'><span class='result-metric-number'>{html.escape(format_number(affected_sum))}</span>"
+                "<span class='result-metric-unit'>대</span></strong></div>"
+                "</div>",
+                unsafe_allow_html=True,
+            )
             st.markdown(
                 "<div class='notice'>"
                 "주의: 대상 대수는 리콜 기록별 합계입니다. "
@@ -1443,12 +1914,34 @@ def render_dashboard() -> None:
             render_official_links(manufacturer)
             render_purchase_links()
 
+    st.markdown(
+        "<section class='result-interpretation' aria-label='조회 결과 해석 안내'>"
+        "<div class='result-interpretation-intro'>"
+        "<div class='result-interpretation-kicker'>"
+        f"{preview_icon_svg('shield')}<span>조회 결과 안내</span></div>"
+        "<div class='result-interpretation-title'>두 정보는 서로 다른 기준으로 확인하세요</div>"
+        "<div class='result-interpretation-caution'>신고 건수만으로 리콜 또는 결함이 확정되지는 않습니다.</div>"
+        "</div>"
+        "<div class='result-interpretation-card'>"
+        f"<span class='result-interpretation-icon'>{preview_icon_svg('bell')}</span>"
+        "<div><strong>공식 리콜 이력</strong>"
+        "<p>제조사 또는 관계 기관이 진행한 안전 조치 정보를 확인합니다.</p></div>"
+        "</div>"
+        "<div class='result-interpretation-card result-interpretation-card-report'>"
+        f"<span class='result-interpretation-icon'>{preview_icon_svg('report')}</span>"
+        "<div><strong>소유자 결함 신고</strong>"
+        "<p>구매 전 참고할 수 있는 소비자 반복 신고 흐름을 살펴봅니다.</p></div>"
+        "</div>"
+        "</section>",
+        unsafe_allow_html=True,
+    )
+
     bottom_left, bottom_right = st.columns(2, gap="medium")
     with bottom_left:
-        with st.container(border=True):
+        with st.container(border=True, key="recall-report-panel"):
             render_recall_history(model_id)
     with bottom_right:
-        with st.container(border=True):
+        with st.container(border=True, key="defect-report-panel"):
             render_defect_reports(model_id, year, complaint_count)
 
 
@@ -1605,7 +2098,7 @@ def render_compare() -> None:
         barmode="group",
         hover_name="display_name",
         labels={"chart_label": "선택 차량", "건수": "건수", "지표": ""},
-        color_discrete_map={"소유자 신고": "#4b8fe8", "공식 리콜 기록": "#f0a15b"},
+        color_discrete_map={"소유자 신고": "#245ccb", "공식 리콜 기록": "#e98666"},
     )
     chart.update_layout(
         height=320,
@@ -1649,19 +2142,46 @@ def render_compare() -> None:
         index=["제조사", "대표 차종", "모델연도", "소유자 신고수", "공식 리콜 기록", "리콜 대상 대수 합계"],
     ).rename_axis("항목").reset_index()
 
-    table_col, chart_col = st.columns(2, gap="medium")
+    st.markdown(
+        "<div class='comparison-report-intro'>"
+        "동일한 기준으로 수치를 비교합니다. 소유자 신고 건수는 결함 확정이나 판매량을 반영한 비율이 아닙니다."
+        "</div>",
+        unsafe_allow_html=True,
+    )
+    table_col, chart_col = st.columns([1.08, 0.92], gap="medium")
     with table_col:
-        st.dataframe(
-            comparison_table,
-            width="stretch",
-            hide_index=True,
-            height=320,
-            column_config={
-                "항목": st.column_config.TextColumn("항목", pinned=True, width="medium"),
-            },
-        )
+        with st.container(border=True, key="compare-table-report"):
+            st.markdown(
+                report_heading_html(
+                    "비교 안전 요약",
+                    "선택한 차량의 신고·리콜 정보를 같은 기준으로 비교합니다.",
+                    "report",
+                ),
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                report_table_html(comparison_table, "comparison-report-table"),
+                unsafe_allow_html=True,
+            )
+
     with chart_col:
-        st.plotly_chart(chart, width="stretch", config={"displayModeBar": False})
+        with st.container(border=True, key="compare-chart-report"):
+            st.markdown(
+                report_heading_html(
+                    "신고·리콜 비교 그래프",
+                    "차종별 신고 기록과 공식 리콜 기록의 건수를 함께 확인합니다.",
+                    "report",
+                    tone="coral",
+                ),
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                "<div class='report-notice'><span class='report-notice-icon'>!</span><span>"
+                "두 지표는 성격이 다릅니다. 신고 건수만으로 특정 차량의 결함이나 리콜 여부를 판단하지 마세요."
+                "</span></div>",
+                unsafe_allow_html=True,
+            )
+            st.plotly_chart(chart, width="stretch", config={"displayModeBar": False})
 
 
 def render_help() -> None:
