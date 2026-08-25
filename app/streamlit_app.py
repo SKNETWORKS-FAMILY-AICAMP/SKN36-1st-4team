@@ -10,10 +10,12 @@
 
 from __future__ import annotations
 
+import base64
 import html
 import re
 import sqlite3
 import unicodedata
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -27,8 +29,10 @@ import streamlit as st
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = PROJECT_ROOT / "data" / "processed" / "database" / "recall_checker.sqlite3"
 IMAGE_DIR = PROJECT_ROOT / "assets" / "vehicles"
+ICON_DIR = PROJECT_ROOT / "assets" / "icons"
 IMAGE_ALIAS_PATH = PROJECT_ROOT / "data" / "mappings" / "vehicle_image_aliases.csv"
 AD_IMAGE_PATH = PROJECT_ROOT / "assets" / "recall_public_service_ad.png"
+PUBLIC_AD_HIDE_COOKIE = "recall_ad_hide_date"
 
 # 공식 확인 링크
 # 정부 자동차리콜센터는 모든 조회 결과에서 공통으로 안내하고,
@@ -47,14 +51,42 @@ MANUFACTURER_OFFICIAL_URLS = {
     "현대자동차": "https://www.hyundai.com/kr/ko",
     "혼다코리아": "https://www.hondakorea.co.kr/",
 }
+MANUFACTURER_SHORT_NAMES = {
+    "현대자동차": "현대",
+    "혼다코리아": "혼다",
+    "르노코리아": "르노",
+    "메르세데스 벤츠": "벤츠",
+    "KG 모빌리티": "KGM",
+}
+MANUFACTURER_ICON_FILES = {
+    "KG 모빌리티": "manufacturers/kgm",
+    "BMW": "manufacturers/bmw",
+    "기아": "manufacturers/kia",
+    "르노코리아": "manufacturers/renault",
+    "메르세데스 벤츠": "manufacturers/mercedes",
+    "볼보": "manufacturers/volvo",
+    "토요타": "manufacturers/toyota",
+    "재규어랜드로버": "manufacturers/jaguarlandrover",
+    "포드": "manufacturers/ford",
+    "현대자동차": "manufacturers/hyundai",
+    "혼다코리아": "manufacturers/honda",
+}
 
 # 조회한 차량을 실제 매물 사이트에서 다시 찾아볼 수 있는 외부 링크
 USED_CAR_MARKET_LINKS = [
-    ("🚘", "다나와 자동차", "중고차 매물 검색", "https://auto.danawa.com/usedcar/"),
-    ("E", "엔카", "국내 중고차 매물", "https://www.encar.com/"),
-    ("KB", "KB차차차", "중고차 검색·시세", "https://www.kbchachacha.com/public/search/main.kbc"),
-    ("K", "K Car", "직영 중고차", "https://www.kcar.com/"),
+    ("markets/danawa", "다나와 자동차", "중고차 매물 검색", "https://auto.danawa.com/usedcar/"),
+    ("markets/encar", "엔카", "국내 중고차 매물", "https://www.encar.com/"),
+    ("markets/kbchachacha", "KB차차차", "중고차 검색·시세", "https://www.kbchachacha.com/public/search/main.kbc"),
+    ("markets/kcar", "K Car", "직영 중고차", "https://www.kcar.com/"),
 ]
+ICON_MIME_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".svg": "image/svg+xml",
+    ".webp": "image/webp",
+    ".ico": "image/x-icon",
+}
 
 st.set_page_config(
     page_title="리콜체크 | 중고차 결함·리콜 조회",
@@ -80,6 +112,38 @@ st.markdown(
         --orange: #e78932;
     }
     .stApp { background: #f7faff; }
+    /* 탭마다 세로 스크롤이 생겼다 사라지며 본문 가로가 달라지지 않게 한다. */
+    html {
+        scrollbar-gutter: stable;
+    }
+    /* Streamlit 상단 Deploy 바와 겹치지 않도록 본문 위쪽 여백을 확보한다. */
+    header[data-testid="stHeader"] {
+        background: transparent;
+    }
+    [data-testid="stAppViewContainer"],
+    [data-testid="stMain"] {
+        width: 100%;
+        max-width: 100%;
+    }
+    .block-container {
+        padding-top: 4.25rem !important;
+        padding-bottom: 1.6rem !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box;
+    }
+    /* 탭 버튼은 내용 너비로 두고, 탭 안의 배너·검색칸은 본문 전체 너비를 쓴다. */
+    [data-testid="stTabs"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin-top: -3.35rem !important;
+    }
+    [data-testid="stTabs"] [role="tabpanel"],
+    [data-testid="stTabs"] [data-testid="stTabPanel"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+    }
     /* 검색 조건은 리콜 조회 본문에 있으므로 사이드바는 공통 메뉴로 사용하지 않는다. */
     section[data-testid="stSidebar"] {
         background: #ffffff;
@@ -88,15 +152,20 @@ st.markdown(
     div[role="listbox"] * { font-size: 1rem !important; }
     /* 본문 비교 화면의 제조사·차종·연식 선택 상자도 같은 크기로 맞춘다. */
     [data-testid="stWidgetLabel"] p {
-        font-size: 1.04rem !important;
+        font-size: 0.9rem !important;
         font-weight: 700 !important;
     }
     [data-testid="stSelectbox"] [data-baseweb="select"] > div {
-        min-height: 52px;
-        font-size: 1rem;
+        min-height: 42px;
+        font-size: 0.92rem;
     }
     [data-testid="stSelectbox"] [data-baseweb="select"] * {
-        font-size: 1rem !important;
+        font-size: 0.92rem !important;
+    }
+    div[data-testid="stButton"] > button {
+        min-height: 42px;
+        padding: 0.35rem 0.85rem;
+        font-size: 0.92rem;
     }
     /* FAQ와 리콜 사유는 긴 문장을 읽는 영역이므로 일반 본문보다 크게 표시한다. */
     [data-testid="stExpander"] summary p {
@@ -122,33 +191,92 @@ st.markdown(
     .brand-title { font-size: 1.35rem; font-weight: 800; color: var(--navy); }
     .brand-subtitle { color: var(--muted); font-size: .78rem; margin: .1rem 0 1.2rem 3.05rem; }
     .top-brand {
-        display:flex; align-items:center; gap:.8rem; padding:.35rem 0 1rem;
-        border-bottom: 1px solid var(--line); margin-bottom: 1rem;
+        display:flex; align-items:center; gap:.7rem; padding:.2rem 0 .35rem;
+        border-bottom: none; margin-bottom: 0;
     }
     .top-brand-mark {
-        width: 48px; height: 48px; border-radius: 15px;
+        width: 38px; height: 38px; border-radius: 12px;
         display:flex; align-items:center; justify-content:center;
         background: linear-gradient(135deg, #2f6fce, #62a5ff);
-        color:white; font-size: 1.55rem;
+        color:white; font-size: 1.25rem;
         box-shadow: 0 8px 20px rgba(47,111,206,.25);
+        flex-shrink: 0;
     }
-    .top-brand-title { font-size: 1.35rem; font-weight: 800; color: var(--navy); }
-    .top-brand-subtitle { color: var(--muted); font-size: .88rem; margin-top: .1rem; }
-    .search-panel {
-        background: #fff; border: 1px solid var(--line); border-radius: 18px;
-        padding: 1.25rem 1.35rem .9rem; box-shadow: 0 8px 26px rgba(26, 71, 125, .05);
-        margin: .8rem 0 1.35rem;
-    }
-    .search-panel-title { color: var(--navy); font-size: 1.15rem; font-weight: 800; margin-bottom: .8rem; }
+    .top-brand-title { font-size: 1.12rem; font-weight: 800; color: var(--navy); }
+    .top-brand-subtitle { color: var(--muted); font-size: .78rem; margin-top: .05rem; }
+    .search-panel-title { color: var(--navy); font-size: 1rem; font-weight: 800; margin-bottom: .35rem; }
     .hero {
-        padding: 2.1rem 2.25rem; border-radius: 24px;
+        padding: .7rem 1.15rem; border-radius: 14px;
         background: linear-gradient(115deg, #14213d 0%, #24599d 65%, #4d93e8 100%);
-        color: white; margin-bottom: 1.35rem;
-        box-shadow: 0 15px 35px rgba(37, 82, 145, .18);
+        color: white; margin: .25rem 0 .55rem;
+        box-shadow: 0 10px 24px rgba(37, 82, 145, .14);
+        width: 100%; box-sizing: border-box;
     }
-    .hero h1 { font-size: 2.1rem; letter-spacing: -.04em; margin: 0 0 .5rem; }
-    .hero p { color: #dbeaff; margin: 0; font-size: 1rem; }
-    .eyebrow { font-size: .78rem; letter-spacing: .12em; color: #9fc7ff; font-weight: 700; margin-bottom: .65rem; }
+    .hero h1 { font-size: 1.12rem; letter-spacing: -.03em; margin: 0 0 .15rem; }
+    .hero p { color: #dbeaff; margin: 0; font-size: .82rem; }
+    .eyebrow { font-size: .68rem; letter-spacing: .12em; color: #9fc7ff; font-weight: 700; margin-bottom: .18rem; }
+    /* 상단 메뉴를 묶인 버튼형 탭으로 보이게 한다. Streamlit 1.61은 data-selected를 쓴다. */
+    [data-testid="stTabs"] [role="tablist"] {
+        gap: 4px !important;
+        background: #e8f1ff !important;
+        border: 1px solid var(--line) !important;
+        border-radius: 14px !important;
+        padding: 4px !important;
+        width: fit-content !important;
+        margin-bottom: .15rem;
+        margin-right: 11rem;
+        position: relative;
+        z-index: 9;
+        pointer-events: auto;
+    }
+    [data-testid="stTabs"] [role="tablist"]::after {
+        display: none !important;
+    }
+    [data-testid="stTabs"] [data-testid="stTab"],
+    [data-testid="stTabs"] [role="tab"] {
+        background: transparent !important;
+        color: #14213d !important;
+        border: none !important;
+        border-radius: 10px !important;
+        height: auto !important;
+        padding: .45rem .95rem !important;
+        font-weight: 700 !important;
+        font-size: .92rem !important;
+    }
+    [data-testid="stTabs"] [data-testid="stTab"] p,
+    [data-testid="stTabs"] [data-testid="stTab"] span,
+    [data-testid="stTabs"] [role="tab"] p,
+    [data-testid="stTabs"] [role="tab"] span {
+        color: inherit !important;
+        font-weight: 700 !important;
+        font-size: .92rem !important;
+    }
+    [data-testid="stTabs"] [data-testid="stTab"]:hover,
+    [data-testid="stTabs"] [role="tab"]:hover {
+        background: #dceaff !important;
+    }
+    [data-testid="stTabs"] [data-testid="stTab"][data-selected],
+    [data-testid="stTabs"] [role="tab"][data-selected],
+    [data-testid="stTabs"] [role="tab"][aria-selected="true"] {
+        background: #14213d !important;
+        color: #fff !important;
+        box-shadow: 0 4px 12px rgba(20, 33, 61, .18);
+    }
+    [data-testid="stTabs"] [data-testid="stTab"][data-selected] p,
+    [data-testid="stTabs"] [data-testid="stTab"][data-selected] span,
+    [data-testid="stTabs"] [data-testid="stTab"][data-selected] *,
+    [data-testid="stTabs"] [role="tab"][data-selected] p,
+    [data-testid="stTabs"] [role="tab"][data-selected] span,
+    [data-testid="stTabs"] [role="tab"][data-selected] *,
+    [data-testid="stTabs"] [role="tab"][aria-selected="true"] p,
+    [data-testid="stTabs"] [role="tab"][aria-selected="true"] span,
+    [data-testid="stTabs"] [role="tab"][aria-selected="true"] * {
+        color: #fff !important;
+    }
+    [data-testid="stTabs"] .react-aria-SelectionIndicator {
+        display: none !important;
+        background: transparent !important;
+    }
     .section-title { color: var(--navy); font-size: 1.25rem; font-weight: 800; margin: .2rem 0 .2rem; }
     .section-caption { color: var(--muted); font-size: .9rem; margin: 0 0 .8rem; }
     .card {
@@ -156,7 +284,7 @@ st.markdown(
         padding: 1.25rem 1.35rem; box-shadow: 0 8px 26px rgba(26, 71, 125, .05);
     }
     .car-card {
-        min-height: 235px; border-radius: 18px; overflow: hidden;
+        min-height: 180px; border-radius: 18px; overflow: hidden;
         background: linear-gradient(145deg, #eff5ff, #dceaff);
         display:flex; align-items:center; justify-content:center;
         border: 1px solid var(--line);
@@ -168,40 +296,47 @@ st.markdown(
     .metric-note { color: var(--muted); font-size: .73rem; margin-top:.25rem; }
     .notice {
         border-left: 4px solid var(--orange); background: #fff8ef;
-        color: #80501f; padding: .85rem 1rem; border-radius: 10px;
-        font-size: .86rem; margin: .6rem 0 1rem;
+        color: #80501f; padding: .55rem .75rem; border-radius: 10px;
+        font-size: .8rem; line-height: 1.5; margin: .45rem 0 .55rem;
+        word-break: keep-all; overflow-wrap: break-word;
     }
-    .source-note { color: var(--muted); font-size: .76rem; margin-top: 1rem; }
+    .source-note { color: var(--muted); font-size: .76rem; margin-top: .45rem; }
     .empty-state { text-align:center; padding: 4rem 1rem; color:var(--muted); }
     .empty-state .emoji { font-size: 3rem; display:block; margin-bottom:.6rem; }
-    .market-title { color: var(--navy); font-size: 1.05rem; font-weight: 800; margin: 1.15rem 0 .55rem; }
+    .market-title { color: var(--navy); font-size: 1.02rem; font-weight: 800; margin: .45rem 0 .4rem; }
+    .official-grid { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:.5rem; }
     .market-grid { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:.5rem; }
     .market-card {
         display:flex; flex-direction:column; align-items:center; justify-content:center;
-        min-height:86px; padding:.55rem .35rem; border:1px solid var(--line);
+        min-height:86px; padding:.55rem .4rem; border:1px solid var(--line);
         border-radius:13px; background:#fff; color:var(--navy); text-decoration:none !important;
         transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
     }
+    .official-grid .market-card { min-height:96px; }
     .market-card:hover { transform:translateY(-2px); border-color:#8bb5ef; box-shadow:0 7px 18px rgba(47,111,206,.12); }
+    .market-card-disabled { opacity:.55; pointer-events:none; }
     .market-icon {
-        width:30px; height:30px; display:flex; align-items:center; justify-content:center;
+        width:34px; height:34px; display:flex; align-items:center; justify-content:center;
         margin-bottom:.3rem; border-radius:9px; background:#eaf2ff; color:#2869c5;
-        font-size:.82rem; font-weight:800;
+        font-size:.82rem; font-weight:800; overflow:hidden;
     }
+    .market-icon-image { background:#fff; border:1px solid var(--line); }
+    .market-icon-image img {
+        width:100%; height:100%; object-fit:contain; display:block;
+    }
+    .official-grid .market-icon { width:40px; height:40px; }
     .market-card strong { font-size:.78rem; white-space:nowrap; }
+    .official-grid .market-card strong {
+        white-space:normal; word-break:keep-all; text-align:center; line-height:1.25;
+    }
     .market-card small { color:var(--muted); font-size:.64rem; margin-top:.12rem; white-space:nowrap; }
-    .interest-box {
-        display:flex; align-items:center; gap:.7rem; min-height:48px; padding:.55rem .75rem;
-        border:1px solid #d7e6fb; border-radius:13px; background:#f7fbff; margin:.15rem 0 1rem;
+    .interest-help { color:var(--muted); font-size:.78rem; margin-top:.15rem; }
+    .st-key-interest-register-button button,
+    .st-key-interest-register-button-added button {
+        min-width: 0 !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
     }
-    .interest-icon {
-        width:30px; height:30px; display:flex; align-items:center; justify-content:center;
-        border-radius:9px; background:#e6f0ff; color:#2f6fce; font-size:1rem;
-    }
-    .interest-title { color:var(--navy); font-size:.88rem; font-weight:800; }
-    .interest-count { color:#2f6fce; margin-left:.25rem; }
-    .interest-items { color:var(--muted); font-size:.72rem; margin-left:.45rem; }
-    .interest-help { color:var(--muted); font-size:.73rem; margin-top:.1rem; }
     .st-key-interest-register-button-added button {
         background: #f5c542 !important; border-color: #dca900 !important; color: #4a3500 !important;
         font-weight: 800 !important;
@@ -220,6 +355,240 @@ st.markdown(
     .small-pill {
         display:inline-block; background:#e9f2ff; color:#2f6fce; border-radius:999px;
         padding:.25rem .65rem; font-size:.75rem; font-weight:700; margin-right:.25rem;
+    }
+    .result-header { margin: .15rem 0 .7rem; }
+    .result-title { color: var(--navy); font-size: 1.28rem; font-weight: 800; margin: 0 0 .4rem; line-height: 1.3; }
+    .result-emphasis {
+        color: #1f3a68; font-size: .88rem; font-weight: 700; line-height: 1.5;
+        background: #eef5ff; border-left: 4px solid var(--blue);
+        padding: .5rem .7rem; border-radius: 8px; margin: 0;
+        word-break: keep-all; overflow-wrap: break-word;
+    }
+    .st-key-result-top-right .notice { margin: .35rem 0 .4rem; }
+    .st-key-result-top-right .market-title { margin-top: .35rem; }
+    .st-key-result-top-right .source-note { margin-top: .35rem; }
+    .st-key-result-top-left [data-testid="stImage"] img {
+        border-radius: 12px;
+    }
+    .quadrant-title { color: var(--navy); font-size: 1.05rem; font-weight: 800; margin: 0 0 .45rem; }
+    .st-key-defect-chart-scroll {
+        overflow-x: auto !important;
+        overflow-y: hidden;
+        padding-bottom: .2rem;
+    }
+    /* 시작 공익광고 모달: 화면 중앙에 두고, 확대해도 배너 오른쪽에 빈 칸이 생기지 않게 한다. */
+    [data-testid="stDialog"] {
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 0.4rem !important;
+        overflow: hidden !important;
+        width: 100% !important;
+        height: 100% !important;
+        inset: 0 !important;
+    }
+    [data-testid="stDialog"]:has(.st-key-public-ad-dialog) > div {
+        /* 배너 비율(1086x1448)에 맞춰 너비를 줄인다. 바깥 오버레이는 건드리지 않는다. */
+        width: min(31.25rem, calc((100dvh - 5.8rem) * 1086 / 1448)) !important;
+        min-width: 0 !important;
+        max-width: calc(100vw - 0.8rem) !important;
+        margin: 0 !important;
+        max-height: calc(100dvh - 0.8rem) !important;
+        overflow: hidden !important;
+    }
+    [data-testid="stDialog"]:has(.st-key-compare-preview-dialog) > div {
+        width: min(31.25rem, calc(100vw - 0.8rem)) !important;
+        min-width: 0 !important;
+        max-width: calc(100vw - 0.8rem) !important;
+        margin: 0 !important;
+        max-height: calc(100dvh - 0.8rem) !important;
+        overflow-y: auto !important;
+    }
+    [data-testid="stDialog"] [slot="title"] {
+        font-size: 0.95rem !important;
+        line-height: 1.25 !important;
+        padding: 0.45rem 2.2rem 0.2rem 0.9rem !important;
+    }
+    [data-testid="stDialog"] [slot="title"] * {
+        font-size: inherit !important;
+        line-height: inherit !important;
+    }
+    [data-testid="stDialog"] button[aria-label="Close"] {
+        top: 0.4rem !important;
+        right: 0.6rem !important;
+        z-index: 20 !important;
+        cursor: pointer !important;
+        pointer-events: auto !important;
+    }
+    [data-testid="stDialog"] [data-testid="stElementToolbar"],
+    [data-testid="stDialog"] [data-testid="stElementToolbarButtonContainer"] {
+        display: none !important;
+    }
+    [data-testid="stDialog"]:has(.st-key-public-ad-dialog) [data-testid="stImage"] {
+        pointer-events: none;
+    }
+    [data-testid="stDialog"] [slot="title"] + div {
+        padding: 0 0.55rem 0.4rem !important;
+    }
+    [data-testid="stDialog"]:has(.st-key-public-ad-dialog) [data-testid="stImage"] img {
+        display: block;
+        width: 100% !important;
+        max-height: calc(100dvh - 5.8rem) !important;
+        height: auto !important;
+        object-fit: contain;
+    }
+    [data-testid="stDialog"]:has(.st-key-compare-preview-dialog) [data-testid="stImage"] {
+        display: flex !important;
+        justify-content: center !important;
+        width: 100% !important;
+        background: linear-gradient(145deg, #eef5ff, #e4edfa);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 0.35rem;
+        margin: 0 0 0.15rem;
+        box-sizing: border-box;
+    }
+    [data-testid="stDialog"]:has(.st-key-compare-preview-dialog) [data-testid="stImage"] > div,
+    [data-testid="stDialog"]:has(.st-key-compare-preview-dialog) [data-testid="stImage"] [data-testid="stImageContainer"] {
+        width: 100% !important;
+        display: flex !important;
+        justify-content: center !important;
+    }
+    [data-testid="stDialog"]:has(.st-key-compare-preview-dialog) [data-testid="stImage"] img {
+        display: block;
+        width: 100% !important;
+        max-width: 100% !important;
+        height: auto !important;
+        max-height: none !important;
+        margin: 0 auto;
+        object-fit: contain;
+        border-radius: 10px;
+    }
+    .st-key-compare-preview-dialog .car-card {
+        min-height: 9rem;
+        width: 100%;
+        margin: 0 auto;
+    }
+    .st-key-compare-preview-dialog .preview-kicker {
+        color: var(--muted); font-size: .72rem; font-weight: 700;
+        letter-spacing: .04em; text-align: center; margin: 0 0 .15rem;
+    }
+    .st-key-compare-preview-dialog .result-title {
+        text-align: center; font-size: 1.08rem; margin: 0 0 .55rem;
+    }
+    .preview-metrics {
+        display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: .4rem; margin: .15rem 0 .2rem;
+    }
+    .preview-metric {
+        background: #f7faff; border: 1px solid var(--line); border-radius: 10px;
+        padding: .38rem .3rem .42rem; text-align: center;
+    }
+    .preview-metric-label {
+        display: block; color: var(--muted); font-size: .62rem; font-weight: 700;
+        line-height: 1.25; word-break: keep-all; margin-bottom: .12rem;
+    }
+    .preview-metric-value {
+        display: block; color: var(--navy); font-size: .92rem; font-weight: 800;
+        line-height: 1.2;
+    }
+    [data-testid="stDialog"] [data-testid="stCheckbox"] {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 0.2rem;
+    }
+    [data-testid="stDialog"] [data-testid="stCheckbox"] label {
+        justify-content: flex-end;
+        width: 100%;
+    }
+    [data-testid="stDialog"] [data-testid="stCheckbox"] p {
+        font-size: 0.78rem !important;
+        color: var(--muted) !important;
+        white-space: nowrap;
+    }
+    .st-key-header-interest {
+        display: flex !important;
+        justify-content: flex-end !important;
+        align-items: center !important;
+        position: relative;
+        z-index: 8;
+        min-height: 3.15rem;
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        pointer-events: none;
+    }
+    .st-key-header-interest [data-testid="stVerticalBlock"],
+    .st-key-header-interest [data-testid="stVerticalBlockBorderWrapper"],
+    .st-key-header-interest [data-testid="stHorizontalBlock"] {
+        width: fit-content !important;
+        max-width: fit-content !important;
+        margin-left: auto !important;
+        gap: 0 !important;
+        min-height: 0 !important;
+        pointer-events: none;
+    }
+    .st-key-header-interest button {
+        width: auto !important;
+        min-width: 0 !important;
+        white-space: nowrap !important;
+        padding: 0.35rem 0.85rem !important;
+        pointer-events: auto;
+    }
+    [data-testid="stPopoverBody"] {
+        min-width: 22.5rem;
+    }
+    .interest-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .65rem;
+        padding: .45rem 0;
+        border-bottom: 1px solid var(--line);
+    }
+    .interest-item:last-of-type { border-bottom: none; }
+    .interest-item-text { min-width: 0; flex: 1; }
+    .interest-item-text strong {
+        display: block; color: var(--navy); font-size: .82rem; line-height: 1.3;
+        word-break: keep-all;
+    }
+    .interest-item-text small {
+        display: block; color: var(--muted); font-size: .72rem; margin-top: .12rem;
+    }
+    .interest-item-photo {
+        width: 76px; height: 50px; object-fit: cover; border-radius: 8px;
+        flex-shrink: 0; background: #eef5ff; border: 1px solid var(--line);
+    }
+    .interest-item-photo-empty {
+        display: flex; align-items: center; justify-content: center; font-size: 1.15rem;
+    }
+    .st-key-compare-tag-list button {
+        border-radius: 999px !important;
+        min-height: 2rem !important;
+        padding: 0.15rem 0.8rem !important;
+        font-size: 0.82rem !important;
+        font-weight: 700 !important;
+    }
+    .st-key-compare-register-button,
+    .st-key-compare-register-button-added {
+        display: flex;
+        justify-content: center;
+        margin-top: .15rem;
+    }
+    .st-key-compare-register-button button,
+    .st-key-compare-register-button-added button {
+        min-width: 11.5rem !important;
+        min-height: 2.15rem !important;
+        padding: 0.25rem 1.1rem !important;
+        font-size: 0.86rem !important;
+        border-radius: 999px !important;
+    }
+    .st-key-compare-register-button-added button {
+        background: #f5c542 !important; border-color: #dca900 !important; color: #4a3500 !important;
+        font-weight: 800 !important;
+    }
+    [data-testid="stHtml"] {
+        display: none !important;
+        height: 0 !important;
     }
     </style>
     """,
@@ -326,35 +695,105 @@ def format_date(value: object) -> str:
     return str(value).replace("-", ".")
 
 
+def resolve_icon_path(relative_stem: str) -> str:
+    """png/svg 등 실제 존재하는 아이콘 파일 경로를 고른다."""
+    if not relative_stem:
+        return ""
+    stem = Path(relative_stem)
+    if stem.suffix.lower() in ICON_MIME_TYPES:
+        return relative_stem if (ICON_DIR / relative_stem).is_file() else ""
+    for extension in (".png", ".svg", ".webp", ".jpg", ".jpeg"):
+        relative_path = f"{relative_stem}{extension}"
+        if (ICON_DIR / relative_path).is_file():
+            return relative_path
+    return ""
+
+
+def file_to_data_uri(relative_path: str) -> str:
+    """아이콘 파일을 카드 HTML에 넣을 data URI로 바꾼다."""
+    if not relative_path:
+        return ""
+    path = ICON_DIR / relative_path
+    mime = ICON_MIME_TYPES.get(path.suffix.lower(), "")
+    if not mime or not path.is_file():
+        return ""
+    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+    return f"data:{mime};base64,{encoded}"
+
+
+def image_file_to_data_uri(path: Path) -> str:
+    """차량 사진 파일을 목록 HTML에 넣을 data URI로 바꾼다."""
+    mime = ICON_MIME_TYPES.get(path.suffix.lower(), "")
+    if not mime or not path.is_file():
+        return ""
+    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+    return f"data:{mime};base64,{encoded}"
+
+
+def brand_icon_html(relative_stem: str, fallback: str) -> str:
+    """로고 파일이 있으면 이미지로, 없으면 글자 아이콘으로 표시한다."""
+    uri = file_to_data_uri(resolve_icon_path(relative_stem))
+    if uri:
+        return (
+            "<span class='market-icon market-icon-image'>"
+            f"<img src='{uri}' alt=''></span>"
+        )
+    return f"<span class='market-icon'>{html.escape(fallback)}</span>"
+
+
+def link_card_html(title: str, description: str, url: str | None, icon_html: str) -> str:
+    """중고차·공식 사이트 이동용 카드 HTML을 만든다."""
+    inner = (
+        f"{icon_html}<strong>{html.escape(title)}</strong>"
+        f"<small>{html.escape(description)}</small>"
+    )
+    if url:
+        return (
+            f"<a class='market-card' href='{html.escape(url, quote=True)}' "
+            "target='_blank' rel='noopener noreferrer'>"
+            f"{inner}</a>"
+        )
+    return f"<span class='market-card market-card-disabled'>{inner}</span>"
+
+
+def manufacturer_site_label(manufacturer: str) -> str:
+    """버튼에 넣을 짧은 제조사 공식 사이트 이름을 만든다."""
+    short_name = MANUFACTURER_SHORT_NAMES.get(manufacturer, manufacturer)
+    return f"{short_name} 공식 사이트"
+
+
 def render_official_links(manufacturer: str) -> None:
-    """조회한 차량을 공식 사이트에서 다시 확인할 수 있는 링크를 표시한다."""
-    st.markdown("### 공식 확인 링크")
+    """조회한 차량을 공식 사이트에서 다시 확인할 수 있는 카드형 링크를 표시한다."""
+    recall_card = link_card_html(
+        "리콜센터",
+        "정부 자동차리콜센터",
+        GOVERNMENT_RECALL_URL,
+        brand_icon_html("recall_center.png", "🚨"),
+    )
+    manufacturer_url = MANUFACTURER_OFFICIAL_URLS.get(manufacturer)
+    manufacturer_icon = brand_icon_html(
+        MANUFACTURER_ICON_FILES.get(manufacturer, ""),
+        manufacturer[:1] if manufacturer else "M",
+    )
+    manufacturer_card = link_card_html(
+        manufacturer_site_label(manufacturer),
+        "제조사 홈페이지",
+        manufacturer_url,
+        manufacturer_icon,
+    )
     st.markdown(
-        "<div class='link-note'>이 화면은 차종·생산기간 기준의 참고 정보입니다. "
-        "개별 차량의 리콜 조치 완료 여부는 차대번호로 공식 사이트에서 확인하세요.</div>",
+        "<div class='official-grid'>" + recall_card + manufacturer_card + "</div>",
         unsafe_allow_html=True,
     )
-    link_cols = st.columns(2)
-    with link_cols[0]:
-        st.link_button("정부 자동차리콜센터", GOVERNMENT_RECALL_URL, width="stretch")
-    manufacturer_url = MANUFACTURER_OFFICIAL_URLS.get(manufacturer)
-    if manufacturer_url:
-        with link_cols[1]:
-            st.link_button(f"{manufacturer} 공식 사이트", manufacturer_url, width="stretch")
 
 
 def render_purchase_links() -> None:
     """중고차 구매 사이트를 카드형 외부 링크로 표시한다."""
     st.markdown("<div class='market-title'>중고차 매물 이어서 보기</div>", unsafe_allow_html=True)
-    cards = []
-    for icon, name, description, url in USED_CAR_MARKET_LINKS:
-        cards.append(
-            f"<a class='market-card' href='{html.escape(url, quote=True)}' "
-            "target='_blank' rel='noopener noreferrer'>"
-            f"<span class='market-icon'>{html.escape(icon)}</span>"
-            f"<strong>{html.escape(name)}</strong>"
-            f"<small>{html.escape(description)}</small></a>"
-        )
+    cards = [
+        link_card_html(name, description, url, brand_icon_html(icon_path, name[:1]))
+        for icon_path, name, description, url in USED_CAR_MARKET_LINKS
+    ]
     st.markdown("<div class='market-grid'>" + "".join(cards) + "</div>", unsafe_allow_html=True)
     st.markdown(
         "<div class='source-note'>외부 중고차 매물 사이트로 이동합니다. "
@@ -456,8 +895,11 @@ if "search_state" not in st.session_state:
     st.session_state.search_state = None
 if "interest_cars" not in st.session_state:
     st.session_state.interest_cars = []
+if "compare_preview" not in st.session_state:
+    st.session_state.compare_preview = None
 if "public_ad_open" not in st.session_state:
-    st.session_state.public_ad_open = True
+    hidden_date = st.context.cookies.get(PUBLIC_AD_HIDE_COOKIE)
+    st.session_state.public_ad_open = hidden_date != date.today().isoformat()
 
 
 # ---------------------------------------------------------------------------
@@ -494,64 +936,208 @@ def render_hero() -> None:
 
 
 def render_interest_summary() -> None:
-    """등록한 관심 차량 수와 대표 차종을 작게 표시한다."""
+    """관심 차량 버튼을 탭과 같은 줄 오른쪽에 두고, 목록에 사진을 함께 보여준다."""
     saved = st.session_state.get("interest_cars", [])
-    names = " · ".join(str(car["model_name"]) for car in saved)
-    if len(names) > 85:
-        names = names[:82] + "…"
-    items = f"<span class='interest-items'>{html.escape(names)}</span>" if names else ""
-
-    summary_col, action_col = st.columns([6, 1], gap="small")
-    with summary_col:
-        st.markdown(
-            f"<div class='interest-box'>"
-            f"<span class='interest-icon'>☆</span>"
-            f"<div><div class='interest-title'>관심 차량 "
-            f"<span class='interest-count'>{len(saved)}/5</span>{items}</div>"
-            f"<div class='interest-help'>리콜 조회에서 등록한 차량을 차종 비교에서 한꺼번에 불러올 수 있습니다.</div></div>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-    with action_col:
-        if saved and st.button("비우기", key="clear_interest_cars", width="stretch"):
-            st.session_state.interest_cars = []
-            st.rerun()
+    with st.popover(f"☆ 관심 차량 {len(saved)}/5", width="content"):
+        if saved:
+            cards = []
+            for car in saved:
+                image_path = find_car_image(str(car["manufacturer"]), str(car["model_name"]))
+                if image_path:
+                    uri = image_file_to_data_uri(image_path)
+                    photo = (
+                        f"<img class='interest-item-photo' src='{uri}' alt=''>"
+                        if uri
+                        else "<span class='interest-item-photo interest-item-photo-empty'>🚙</span>"
+                    )
+                else:
+                    photo = "<span class='interest-item-photo interest-item-photo-empty'>🚙</span>"
+                cards.append(
+                    "<div class='interest-item'>"
+                    "<div class='interest-item-text'>"
+                    f"<strong>{html.escape(str(car['model_name']))}</strong>"
+                    f"<small>{html.escape(str(car['manufacturer']))} · {html.escape(str(car['year']))}</small>"
+                    f"</div>{photo}</div>"
+                )
+            st.markdown("".join(cards), unsafe_allow_html=True)
+            if st.button("목록 비우기", key="clear_interest_cars", width="stretch"):
+                st.session_state.interest_cars = []
+                st.rerun()
+        else:
+            st.caption("차량 조회나 차종 비교에서 등록하면 비교 대상 태그로 표시됩니다.")
 
 
 def dismiss_public_ad() -> None:
     """광고 모달의 우측 상단 X를 눌렀을 때 다시 자동으로 열리지 않게 한다."""
     st.session_state.public_ad_open = False
+    if st.session_state.get("hide_public_ad_today"):
+        st.session_state.persist_hide_public_ad = True
+
+
+def persist_hide_public_ad_today() -> None:
+    """오늘 하루 배너를 숨기도록 브라우저 쿠키를 남긴다."""
+    today = date.today().isoformat()
+    now = datetime.now()
+    midnight = datetime.combine(now.date() + timedelta(days=1), time.min)
+    max_age = max(60, int((midnight - now).total_seconds()))
+    st.html(
+        f'<script>document.cookie="{PUBLIC_AD_HIDE_COOKIE}={today};path=/;max-age={max_age};SameSite=Lax";</script>',
+        unsafe_allow_javascript=True,
+    )
 
 
 @st.dialog(
     "자동차 리콜 안전 안내",
-    width="large",
+    width="small",
     dismissible=True,
     on_dismiss=dismiss_public_ad,
 )
 def render_public_service_ad() -> None:
     """앱 시작 시 표시하는 자동차 리콜 공익광고 모달."""
-    if AD_IMAGE_PATH.exists():
-        st.image(str(AD_IMAGE_PATH), width="stretch")
-    else:
-        st.warning("공익광고 이미지를 찾지 못했습니다.")
-    st.caption("리콜 대상 여부는 자동차리콜센터에서 차량번호 또는 차대번호로 다시 확인하세요.")
-    if st.button("닫기", key="close_public_service_ad", width="stretch"):
-        st.session_state.public_ad_open = False
-        st.rerun()
+    with st.container(key="public-ad-dialog"):
+        if AD_IMAGE_PATH.exists():
+            st.image(str(AD_IMAGE_PATH), width="stretch")
+        else:
+            st.warning("공익광고 이미지를 찾지 못했습니다.")
+        st.checkbox("오늘 하루동안 보지않기", key="hide_public_ad_today")
 
 
 def add_interest_car(search: dict[str, object]) -> tuple[bool, str]:
     """조회한 차량을 중복 없이 최대 5대까지 관심 목록에 추가한다."""
     saved = st.session_state.get("interest_cars", [])
-    candidate_key = (int(search["model_id"]), str(search["year"]))
-    existing_keys = {(int(car["model_id"]), str(car["year"])) for car in saved}
+    candidate_key = car_identity(search)
+    existing_keys = {car_identity(car) for car in saved}
     if candidate_key in existing_keys:
         return False, "이미 등록한 차량입니다."
     if len(saved) >= 5:
         return False, "관심 차량은 최대 5대까지 등록할 수 있습니다."
     st.session_state.interest_cars = [*saved, dict(search)]
     return True, "관심 차량에 등록했습니다."
+
+
+def car_identity(car: dict[str, object]) -> tuple[int, str]:
+    """관심·비교 목록에서 같은 차량인지 비교할 때 쓴다."""
+    year = car.get("year", car.get("model_year"))
+    return (int(car["model_id"]), str(year))
+
+
+def car_tag_label(car: dict[str, object]) -> str:
+    """비교 화면에 붙일 짧은 차종 태그 문구."""
+    year = car.get("year", car.get("model_year"))
+    year_label = "전체" if year == "전체 연식" else f"{year}년형"
+    return f"{car['model_name']} · {year_label} ×"
+
+
+def remove_interest_car(model_id: int, year: object) -> None:
+    """관심 차량 태그에서 해당 차종을 뺀다."""
+    target = (int(model_id), str(year))
+    st.session_state.interest_cars = [
+        car for car in st.session_state.get("interest_cars", [])
+        if car_identity(car) != target
+    ]
+
+
+def complaint_count_help(year: object) -> str:
+    """신고 건수 카드에 붙는 설명을 연식 선택에 맞게 반환한다."""
+    if year == "전체 연식":
+        return "선택한 대표 차종의 모든 모델연도에 접수된 소비자 결함 신고 행의 누적 건수입니다."
+    return f"선택한 {year}년형에 접수된 소비자 결함 신고 행의 수입니다."
+
+
+def get_summary_metrics(model_id: int, year: object) -> tuple[str, int, int, int] | None:
+    """조회·비교 팝업에 쓸 요약 숫자를 가져온다."""
+    overview = read_query(OVERVIEW_SQL, {"model_id": model_id})
+    if overview.empty:
+        return None
+    summary = overview.iloc[0]
+    if year == "전체 연식":
+        complaint_count = int(summary["complaint_count"])
+        year_label = "누적 소비자 결함 신고수"
+    else:
+        year_count = read_query(
+            DEFECT_COUNT_BY_YEAR_SQL,
+            {"model_id": model_id, "model_year": int(year)},
+        )
+        complaint_count = int(year_count.iloc[0]["complaint_count"])
+        year_label = f"{year}년형 신고"
+    return (
+        year_label,
+        complaint_count,
+        int(summary["recall_record_count"]),
+        int(summary["affected_count_sum"]),
+    )
+
+
+def dismiss_compare_preview() -> None:
+    """비교 조회 팝업을 닫으면 다시 자동으로 열리지 않게 한다."""
+    st.session_state.compare_preview = None
+
+
+@st.dialog(
+    "차종 조회",
+    width="small",
+    dismissible=True,
+    on_dismiss=dismiss_compare_preview,
+)
+def render_compare_preview_dialog() -> None:
+    """비교할 차종의 사진과 요약 숫자를 배너 크기의 팝업으로 보여준다."""
+    preview = st.session_state.get("compare_preview")
+    if not preview:
+        return
+
+    manufacturer = str(preview["manufacturer"])
+    model_name = str(preview["model_name"])
+    year = preview["year"]
+    metrics = get_summary_metrics(int(preview["model_id"]), year)
+    is_registered = any(
+        car_identity(car) == car_identity(preview)
+        for car in st.session_state.get("interest_cars", [])
+    )
+    year_text = "전체 연식" if year == "전체 연식" else f"{year}년형"
+
+    with st.container(key="compare-preview-dialog", gap="small"):
+        st.markdown(
+            f"<div class='preview-kicker'>{html.escape(manufacturer)}</div>"
+            f"<div class='result-title'>{html.escape(model_name)} · {html.escape(year_text)}</div>",
+            unsafe_allow_html=True,
+        )
+        render_car_visual(manufacturer, model_name)
+        if metrics is None:
+            st.warning("선택한 차종의 요약 정보를 찾지 못했습니다.")
+        else:
+            year_label, complaint_count, recall_count, affected_sum = metrics
+            st.markdown(
+                "<div class='preview-metrics'>"
+                f"<div class='preview-metric' title='{html.escape(complaint_count_help(year), quote=True)}'>"
+                f"<span class='preview-metric-label'>{html.escape(year_label)}</span>"
+                f"<strong class='preview-metric-value'>{html.escape(format_number(complaint_count))}</strong>"
+                "</div>"
+                "<div class='preview-metric'>"
+                "<span class='preview-metric-label'>공식 리콜 기록</span>"
+                f"<strong class='preview-metric-value'>{html.escape(format_number(recall_count))}건</strong>"
+                "</div>"
+                "<div class='preview-metric'>"
+                "<span class='preview-metric-label'>리콜 대상 대수</span>"
+                f"<strong class='preview-metric-value'>{html.escape(format_number(affected_sum))}대</strong>"
+                "</div></div>",
+                unsafe_allow_html=True,
+            )
+        button_key = "compare-register-button-added" if is_registered else "compare-register-button"
+        button_label = "비교차량 등록됨" if is_registered else "비교차량 등록"
+        with st.container(key=button_key, horizontal=True, horizontal_alignment="center"):
+            if st.button(
+                button_label,
+                key="add_compare_car",
+                icon=":material/star:",
+                width="content",
+                disabled=is_registered,
+            ):
+                added, message = add_interest_car(preview)
+                if added:
+                    st.session_state.compare_preview = None
+                    st.rerun()
+                else:
+                    st.warning(message)
 
 
 def render_empty() -> None:
@@ -589,10 +1175,7 @@ def render_car_visual(manufacturer: str, model: str) -> None:
 
 
 def render_recall_search() -> None:
-    """리콜 조회 페이지 본문에 제조사·차종·연식 조건을 표시한다."""
-    st.markdown("## 리콜 조회")
-    st.markdown("제조사, 대표 차종, 모델 연도를 선택한 뒤 조회 버튼을 눌러 주세요.")
-
+    """차량 조회 페이지 본문에 제조사·차종·연식 조건을 표시한다."""
     if manufacturers.empty:
         st.warning("등록된 제조사 데이터가 없습니다.")
         return
@@ -606,9 +1189,13 @@ def render_recall_search() -> None:
         else 0
     )
 
-    with st.container(border=True):
+    with st.container(border=True, gap="small"):
         st.markdown("<div class='search-panel-title'>차량 검색 조건</div>", unsafe_allow_html=True)
-        manufacturer_col, model_col, year_col = st.columns([1, 1.25, 1])
+        manufacturer_col, model_col, year_col, button_col = st.columns(
+            [1.1, 1.35, 1, 0.8],
+            vertical_alignment="bottom",
+            gap="small",
+        )
         with manufacturer_col:
             selected_manufacturer = st.selectbox(
                 "제조사",
@@ -662,241 +1249,253 @@ def render_recall_search() -> None:
                 key="recall_year",
             )
 
-        if st.button("조회하기", type="primary", width="stretch", key="recall_search_button"):
-            st.session_state.search_state = {
-                "manufacturer": selected_manufacturer,
-                "model_id": selected_model_id,
-                "model_name": selected_model_name,
-                "year": selected_year,
-            }
-            st.rerun()
+        with button_col:
+            if st.button("조회하기", type="primary", width="stretch", key="recall_search_button"):
+                st.session_state.search_state = {
+                    "manufacturer": selected_manufacturer,
+                    "model_id": selected_model_id,
+                    "model_name": selected_model_name,
+                    "year": selected_year,
+                }
+                st.rerun()
 
+    if not st.session_state.get("search_state"):
+        st.markdown(
+            "<div class='source-note'>공식 리콜과 소유자 결함신고를 분리해서 보여드립니다. "
+            "신고 건수는 리콜 확정 건수가 아닙니다.</div>",
+            unsafe_allow_html=True,
+        )
+
+
+def render_recall_history(model_id: int) -> None:
+    """공식 리콜 이력 표와 리콜 사유 펼쳐보기를 표시한다."""
+    st.markdown('<div class="quadrant-title">공식 리콜 이력</div>', unsafe_allow_html=True)
+    st.caption("생산기간, 리콜 개시일, 대상 대수와 리콜 사유를 확인합니다.")
+    recalls = read_query(RECALLS_SQL, {"model_id": model_id})
+    if recalls.empty:
+        st.info("등록된 공식 리콜 기록이 없습니다.")
+        return
+
+    display_recalls = recalls.copy()
+    display_recalls["생산기간"] = display_recalls.apply(
+        lambda row: f"{format_date(row['production_start_date'])} ~ {format_date(row['production_end_date'])}",
+        axis=1,
+    )
+    display_recalls["리콜 개시일"] = display_recalls["recall_start_date"].map(format_date)
+    display_recalls["대상 대수"] = display_recalls["affected_count"].map(lambda x: f"{format_number(x)}대")
+    st.dataframe(
+        display_recalls[["raw_model_name", "생산기간", "리콜 개시일", "대상 대수"]].rename(
+            columns={"raw_model_name": "원본 차명"}
+        ),
+        width="stretch",
+        hide_index=True,
+        height=220,
+        column_config={"원본 차명": st.column_config.TextColumn(width="medium")},
+    )
+    for _, recall in recalls.iterrows():
+        title = f"{format_date(recall['recall_start_date'])} · {recall['raw_model_name']}"
+        with st.expander(title):
+            st.write(recall["recall_reason"] or "리콜 사유가 입력되지 않았습니다.")
+            st.caption(
+                f"생산기간: {format_date(recall['production_start_date'])} ~ {format_date(recall['production_end_date'])}  |  "
+                f"대상 대수: {format_number(recall['affected_count'])}대"
+            )
+
+
+def render_defect_reports(model_id: int, year: object, complaint_count: int) -> None:
+    """소유자 결함 신고 안내와 연도별 막대그래프를 표시한다."""
+    st.markdown('<div class="quadrant-title">소유자 결함 신고</div>', unsafe_allow_html=True)
     st.markdown(
-        "<div class='source-note'>공식 리콜과 소유자 결함신고를 분리해서 보여드립니다. "
-        "신고 건수는 리콜 확정 건수가 아닙니다.</div>",
+        '<div class="notice">신고 건수는 소유자가 접수한 기록의 개수입니다.<br>'
+        "결함 확정이나 리콜 대상 판정을 의미하지 않으며, 판매량을 반영한 비교가 아닙니다.</div>",
         unsafe_allow_html=True,
     )
+    defect_by_year = read_query(DEFECT_BY_YEAR_SQL, {"model_id": model_id})
+    if defect_by_year.empty:
+        st.info("모델연도가 있는 결함 신고 기록이 없습니다.")
+        return
+
+    chart_data = defect_by_year.copy()
+    chart_data["model_year"] = chart_data["model_year"].astype(int)
+    chart_data = chart_data.sort_values("model_year")
+    chart_data["year_label"] = chart_data["model_year"].map(lambda value: f"{int(value) % 100:02d}")
+    year_count = len(chart_data)
+    visible_years = 10
+    bar_width_px = 68
+    chart_width = max(visible_years, year_count) * bar_width_px
+
+    chart = px.bar(
+        chart_data,
+        x="year_label",
+        y="complaint_count",
+        labels={"year_label": "연도", "complaint_count": "신고 건수"},
+        color_discrete_sequence=["#4b8fe8"],
+    )
+    chart.update_layout(
+        height=280,
+        width=chart_width,
+        autosize=False,
+        margin=dict(l=10, r=10, t=20, b=10),
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        bargap=0.35,
+    )
+    chart.update_xaxes(type="category", tickangle=0, fixedrange=False)
+    if year_count > visible_years:
+        start = year_count - visible_years
+        chart.update_xaxes(range=[start - 0.5, year_count - 0.5])
+    max_count = int(chart_data["complaint_count"].max())
+    chart.update_yaxes(
+        rangemode="tozero",
+        range=[0, max(5, int(max_count * 1.2) + 1)],
+        dtick=1 if max_count <= 10 else None,
+        tickformat=",d",
+        fixedrange=True,
+    )
+    chart.update_traces(width=0.55)
+    with st.container(key="defect-chart-scroll"):
+        st.plotly_chart(chart, width=chart_width, config={"displayModeBar": False, "scrollZoom": False})
+    if year != "전체 연식":
+        st.info(f"현재 선택: {year}년형 · 신고 {format_number(complaint_count)}건")
 
 
 def render_dashboard() -> None:
-    """선택한 차종의 요약·리콜·신고·세부차명을 표시한다."""
+    """선택한 차종의 요약·리콜·신고를 4분할로 표시한다."""
     search = st.session_state.get("search_state")
     if not search:
-        empty_col, market_col = st.columns([1.55, 1], gap="large")
-        with empty_col:
-            render_empty()
-        with market_col:
-            render_purchase_links()
         return
 
     model_id = int(search["model_id"])
     manufacturer = str(search["manufacturer"])
     model_name = str(search["model_name"])
     year = search["year"]
-    overview = read_query(OVERVIEW_SQL, {"model_id": model_id})
-    if overview.empty:
+    metrics = get_summary_metrics(model_id, year)
+    if metrics is None:
         st.warning("선택한 차종의 요약 정보를 찾지 못했습니다.")
         return
-    summary = overview.iloc[0]
+    year_label, complaint_count, recall_count, affected_sum = metrics
 
-    st.markdown(f"<div class='section-caption'>홈 〉 리콜 조회 〉 {html.escape(model_name)}</div>", unsafe_allow_html=True)
-    left, right = st.columns([1.05, 2.4], gap="large")
-    with left:
-        render_car_visual(manufacturer, model_name)
-        st.caption("사진은 선택 사항이며, 현재 데이터 조회에는 영향을 주지 않습니다.")
-    with right:
-        st.markdown(
-            f"<span class='small-pill'>{html.escape(manufacturer)}</span>"
-            f"<span class='small-pill'>{html.escape(str(summary['vehicle_type'] or '패밀리카'))}</span>",
-            unsafe_allow_html=True,
-        )
-        st.markdown(f"## {html.escape(model_name)} 리콜·결함 요약")
-        if year == "전체 연식":
-            complaint_count = int(summary["complaint_count"])
-            year_label = "누적 소비자 결함 신고수"
-            complaint_help = "선택한 대표 차종의 모든 모델연도에 접수된 소비자 결함 신고 행의 누적 건수입니다."
-        else:
-            year_count = read_query(
-                DEFECT_COUNT_BY_YEAR_SQL,
-                {"model_id": model_id, "model_year": int(year)},
-            )
-            complaint_count = int(year_count.iloc[0]["complaint_count"])
-            year_label = f"{year}년형 신고"
-            complaint_help = f"선택한 {year}년형에 접수된 소비자 결함 신고 행의 수입니다."
-        metric_cols = st.columns(3)
-        with metric_cols[0]:
-            st.metric(year_label, format_number(complaint_count), help=complaint_help)
-        with metric_cols[1]:
-            st.metric("공식 리콜 기록", f"{format_number(summary['recall_record_count'])}건")
-        with metric_cols[2]:
-            st.metric("리콜 대상 대수 합계", f"{format_number(summary['affected_count_sum'])}대")
-        st.markdown(
-            "<div class='notice'>주의: 리콜 대상 대수는 리콜 기록별 합계입니다. 개별 차량의 조치 완료 여부는 차대번호 조회가 필요합니다.</div>",
-            unsafe_allow_html=True,
-        )
-        interest_key = (int(search["model_id"]), str(search["year"]))
-        is_registered = any(
-            (int(car["model_id"]), str(car["year"])) == interest_key
-            for car in st.session_state.get("interest_cars", [])
-        )
-        button_key = "interest-register-button-added" if is_registered else "interest-register-button"
-        button_label = "★ 관심차량 등록됨" if is_registered else "☆ 관심차량 등록하기"
-        with st.container(key=button_key):
-            if st.button(
-                button_label,
-                key="add_interest_car",
-                width="stretch",
-                disabled=is_registered,
+    is_registered = any(
+        car_identity(car) == car_identity(search)
+        for car in st.session_state.get("interest_cars", [])
+    )
+
+    st.markdown(
+        f"<div class='result-header'>"
+        f"<div class='result-title'>{html.escape(model_name)} 리콜/결함 요약</div>"
+        "<div class='result-emphasis'>"
+        "공식 리콜과 소유자 결함신고를 분리해서 보여드립니다. "
+        "신고 건수는 리콜 확정 건수가 아닙니다."
+        "</div></div>",
+        unsafe_allow_html=True,
+    )
+
+    top_left, top_right = st.columns(2, gap="medium")
+    with top_left:
+        with st.container(
+            border=True,
+            height="stretch",
+            key="result-top-left",
+            gap="small",
+        ):
+            render_car_visual(manufacturer, model_name)
+            button_key = "interest-register-button-added" if is_registered else "interest-register-button"
+            button_label = "관심 차량 등록됨" if is_registered else "관심 차량 등록"
+            with st.container(
+                key=button_key,
+                horizontal=True,
+                horizontal_alignment="center",
             ):
-                added, message = add_interest_car(search)
-                if added:
-                    st.rerun()
-                else:
-                    st.warning(message)
-        render_official_links(manufacturer)
-        render_purchase_links()
+                if st.button(
+                    button_label,
+                    key="add_interest_car",
+                    icon=":material/star:",
+                    width="content",
+                    disabled=is_registered,
+                ):
+                    added, message = add_interest_car(search)
+                    if added:
+                        st.rerun()
+                    else:
+                        st.warning(message)
 
-    st.divider()
-    tab_recall, tab_defect = st.tabs(["공식 리콜 이력", "소유자 결함 신고"])
-
-    with tab_recall:
-        st.markdown('<div class="section-title">제작사가 진행한 공식 시정조치</div>', unsafe_allow_html=True)
-        st.markdown('<div class="section-caption">생산기간, 리콜 개시일, 대상 대수와 리콜 사유를 확인합니다.</div>', unsafe_allow_html=True)
-        recalls = read_query(RECALLS_SQL, {"model_id": model_id})
-        if recalls.empty:
-            st.info("등록된 공식 리콜 기록이 없습니다.")
-        else:
-            display_recalls = recalls.copy()
-            display_recalls["생산기간"] = display_recalls.apply(
-                lambda row: f"{format_date(row['production_start_date'])} ~ {format_date(row['production_end_date'])}", axis=1
-            )
-            display_recalls["리콜 개시일"] = display_recalls["recall_start_date"].map(format_date)
-            display_recalls["대상 대수"] = display_recalls["affected_count"].map(lambda x: f"{format_number(x)}대")
-            st.dataframe(
-                display_recalls[["raw_model_name", "생산기간", "리콜 개시일", "대상 대수"]].rename(
-                    columns={"raw_model_name": "원본 차명"}
-                ),
-                width="stretch",
-                hide_index=True,
-                column_config={"원본 차명": st.column_config.TextColumn(width="large")},
-            )
-            for _, recall in recalls.iterrows():
-                title = f"{format_date(recall['recall_start_date'])} · {recall['raw_model_name']}"
-                with st.expander(title):
-                    st.write(recall["recall_reason"] or "리콜 사유가 입력되지 않았습니다.")
-                    st.caption(
-                        f"생산기간: {format_date(recall['production_start_date'])} ~ {format_date(recall['production_end_date'])}  |  "
-                        f"대상 대수: {format_number(recall['affected_count'])}대"
-                    )
+    with top_right:
+        with st.container(
+            border=True,
+            height="stretch",
+            key="result-top-right",
+            gap="small",
+        ):
+            metric_cols = st.columns(3)
+            with metric_cols[0]:
+                st.metric(year_label, format_number(complaint_count), help=complaint_count_help(year))
+            with metric_cols[1]:
+                st.metric("공식 리콜 기록", f"{format_number(recall_count)}건")
+            with metric_cols[2]:
+                st.metric("리콜 대상 대수 합계", f"{format_number(affected_sum)}대")
             st.markdown(
-                "<div class='source-note'>출처: 한국교통안전공단 차종별 리콜대수 데이터 · 공식 리콜 여부를 확인하는 참고 정보입니다.</div>",
+                "<div class='notice'>"
+                "주의: 대상 대수는 리콜 기록별 합계입니다. "
+                "개별 차량 조치 여부는 차대번호로 확인하세요."
+                "</div>",
                 unsafe_allow_html=True,
             )
+            render_official_links(manufacturer)
+            render_purchase_links()
 
-    with tab_defect:
-        st.markdown('<div class="section-title">소유자 결함 신고 현황</div>', unsafe_allow_html=True)
-        st.markdown(
-            '<div class="notice">신고 건수는 소유자가 접수한 기록의 개수입니다. 결함 확정이나 리콜 대상 판정을 의미하지 않으며, 판매량이 없는 단순 건수 비교입니다.</div>',
-            unsafe_allow_html=True,
-        )
-        defect_by_year = read_query(DEFECT_BY_YEAR_SQL, {"model_id": model_id})
-        if defect_by_year.empty:
-            st.info("모델연도가 있는 결함 신고 기록이 없습니다.")
-        else:
-            defect_by_year["model_year"] = defect_by_year["model_year"].astype(int).astype(str)
-            chart = px.bar(
-                defect_by_year,
-                x="model_year",
-                y="complaint_count",
-                labels={"model_year": "모델연도", "complaint_count": "신고 건수"},
-                color_discrete_sequence=["#4b8fe8"],
-            )
-            chart.update_layout(
-                height=320,
-                margin=dict(l=10, r=10, t=25, b=10),
-                plot_bgcolor="rgba(0,0,0,0)",
-                paper_bgcolor="rgba(0,0,0,0)",
-                bargap=0.78,
-            )
-            # 연도 하나만 있을 때 2013.974처럼 소수 눈금이 생기지 않도록
-            # x축을 숫자가 아닌 범주형 연도로 고정한다.
-            chart.update_xaxes(type="category")
-            max_count = int(defect_by_year["complaint_count"].max())
-            chart.update_yaxes(
-                rangemode="tozero",
-                range=[0, max(5, int(max_count * 1.2) + 1)],
-                dtick=1 if max_count <= 10 else None,
-                tickformat=",d",
-            )
-            chart.update_traces(width=0.36)
-            st.plotly_chart(chart, width="stretch", config={"displayModeBar": False})
-            if year != "전체 연식":
-                st.info(f"현재 선택: {year}년형 · 신고 {format_number(complaint_count)}건")
+    bottom_left, bottom_right = st.columns(2, gap="medium")
+    with bottom_left:
+        with st.container(border=True):
+            render_recall_history(model_id)
+    with bottom_right:
+        with st.container(border=True):
+            render_defect_reports(model_id, year, complaint_count)
+
 
 def render_compare() -> None:
-    """제조사·대표 차종·모델연도를 고른 차량을 비교한다."""
+    """관심 차량 태그와 한 줄 조회로 차종을 비교한다."""
     st.markdown("## 차종 비교")
     st.markdown(
-        "제조사와 대표 차종을 먼저 고른 뒤 모델연도까지 지정해서 비교합니다. "
+        "관심 차량을 태그로 모아 비교합니다. 아래에서 차종을 조회해 비교 대상을 추가할 수 있습니다. "
         "판매량을 반영한 결함률은 아닙니다."
     )
 
     saved = st.session_state.get("interest_cars", [])
-    load_col, load_note_col = st.columns([1.25, 2.75], gap="small")
-    with load_col:
-        if st.button(
-            f"관심 차량 불러오기 ({len(saved)}/5)",
-            key="load_interest_cars",
-            type="secondary",
-            width="stretch",
-            disabled=not saved,
-        ):
-            # 저장한 차량 수만큼 비교 행을 만들고, 각 selectbox의 초기값을 지정한다.
-            st.session_state.compare_loaded_count = max(2, min(5, len(saved)))
-            for index, car in enumerate(saved[:5]):
-                st.session_state[f"compare_manufacturer_{index}"] = car["manufacturer"]
-                st.session_state[f"compare_model_{index}"] = car["model_name"]
-                st.session_state[f"compare_year_{index}"] = car["year"]
-            st.session_state.compare_loaded = True
-            st.rerun()
-    with load_note_col:
-        if saved:
-            st.caption("관심 차량을 불러오면 아래 비교 조건에 자동으로 채워집니다.")
-        else:
-            st.caption("리콜 조회에서 관심 차량을 먼저 등록해 주세요. 최대 5대까지 저장할 수 있습니다.")
+    st.markdown("<div class='search-panel-title'>관심 차량</div>", unsafe_allow_html=True)
+    if saved:
+        with st.container(key="compare-tag-list", horizontal=True, gap="small"):
+            for car in saved:
+                model_id = int(car["model_id"])
+                year = car["year"]
+                if st.button(
+                    car_tag_label(car),
+                    key=f"remove_interest_tag_{model_id}_{year}",
+                    type="secondary",
+                ):
+                    remove_interest_car(model_id, year)
+                    st.rerun()
+    else:
+        st.caption("등록된 관심 차량이 없습니다. 아래에서 차종을 조회해 추가할 수 있습니다.")
 
-    compare_default = 2
-    if "compare_loaded_count" in st.session_state:
-        compare_default = int(st.session_state.pop("compare_loaded_count"))
-        # number_input의 기존 위젯 값을 지워 불러온 차량 수로 다시 초기화한다.
-        st.session_state.pop("compare_count", None)
+    if manufacturers.empty:
+        st.warning("등록된 제조사 데이터가 없습니다.")
+        return
 
-    compare_count = int(
-        st.number_input(
-            "비교할 차량 수",
-            min_value=2,
-            max_value=5,
-            value=compare_default,
-            step=1,
-            help="2대부터 5대까지 비교할 수 있습니다.",
-            key="compare_count",
+    with st.container(border=True, gap="small"):
+        st.markdown("<div class='search-panel-title'>비교 차량 추가 하기</div>", unsafe_allow_html=True)
+        manufacturer_col, model_col, year_col, button_col = st.columns(
+            [1.1, 1.35, 1, 0.8],
+            vertical_alignment="bottom",
+            gap="small",
         )
-    )
-
-    selected_cars: list[dict[str, object]] = []
-    for index in range(compare_count):
-        st.markdown(f"### 비교 차량 {index + 1}")
-        manufacturer_col, model_col, year_col = st.columns([1, 1.25, 1])
-
+        manufacturer_options = manufacturers["manufacturer_name"].tolist()
         with manufacturer_col:
-            manufacturer_options = manufacturers["manufacturer_name"].tolist()
-            manufacturer_key = f"compare_manufacturer_{index}"
-            if st.session_state.get(manufacturer_key) not in manufacturer_options:
-                st.session_state[manufacturer_key] = manufacturer_options[0]
+            if st.session_state.get("compare_lookup_manufacturer") not in manufacturer_options:
+                st.session_state.compare_lookup_manufacturer = manufacturer_options[0]
             manufacturer = st.selectbox(
                 "제조사",
                 manufacturer_options,
-                key=manufacturer_key,
+                key="compare_lookup_manufacturer",
             )
         manufacturer_id = int(
             manufacturers.loc[
@@ -905,80 +1504,81 @@ def render_compare() -> None:
             ].iloc[0]
         )
         models = read_query(MODELS_SQL, {"manufacturer_id": manufacturer_id})
-
+        lookup_ready = not models.empty
         with model_col:
-            if models.empty:
-                st.warning("차종 없음")
-                continue
-            model_labels = models["model_name"].tolist()
-            model_key = f"compare_model_{index}"
-            if st.session_state.get(model_key) not in model_labels:
-                st.session_state[model_key] = model_labels[0]
-            model_label = st.selectbox(
-                "대표 차종",
-                model_labels,
-                key=model_key,
-            )
-        model_row = models.loc[models["model_name"] == model_label].iloc[0]
-        model_id = int(model_row["model_id"])
-
-        model_years = read_query(YEARS_SQL, {"model_id": model_id})["model_year"].tolist()
-        year_options: list[str | int] = ["전체 연식"] + [int(year) for year in model_years]
+            if not lookup_ready:
+                st.warning("이 제조사에 등록된 대표 차종이 없습니다.")
+                model_label = ""
+                model_id = 0
+            else:
+                model_labels = models["model_name"].tolist()
+                if st.session_state.get("compare_lookup_model") not in model_labels:
+                    st.session_state.compare_lookup_model = model_labels[0]
+                model_label = st.selectbox(
+                    "대표 차종",
+                    model_labels,
+                    key="compare_lookup_model",
+                )
+                model_row = models.loc[models["model_name"] == model_label].iloc[0]
+                model_id = int(model_row["model_id"])
+        year_options: list[str | int] = ["전체 연식"]
+        if lookup_ready:
+            model_years = read_query(YEARS_SQL, {"model_id": model_id})["model_year"].tolist()
+            year_options = ["전체 연식"] + [int(year) for year in model_years]
         with year_col:
-            year_key = f"compare_year_{index}"
-            if st.session_state.get(year_key) not in year_options:
-                st.session_state[year_key] = year_options[0]
+            if st.session_state.get("compare_lookup_year") not in year_options:
+                st.session_state.compare_lookup_year = year_options[0]
             year = st.selectbox(
-                "모델연도",
+                "모델 연도",
                 year_options,
-                key=year_key,
+                key="compare_lookup_year",
             )
+        with button_col:
+            if st.button(
+                "조회",
+                type="primary",
+                width="stretch",
+                key="compare_lookup_button",
+                disabled=not lookup_ready,
+            ):
+                st.session_state.compare_preview = {
+                    "manufacturer": manufacturer,
+                    "model_id": model_id,
+                    "model_name": model_label,
+                    "year": year,
+                }
+                st.rerun()
 
-        selected_cars.append(
-            {
-                "manufacturer": manufacturer,
-                "model_id": model_id,
-                "model_name": model_label,
-                "model_year": year,
-            }
-        )
+    if st.session_state.get("compare_preview") and not st.session_state.get("public_ad_open"):
+        render_compare_preview_dialog()
 
     st.markdown(
-        "<div class='notice'>모델연도는 소유자 신고 건수에 적용됩니다. 공식 리콜은 생산기간 기준이라 선택한 모델연도로 억지로 나누지 않고 차종 전체 리콜을 보여줍니다.</div>",
+        "<div class='notice'>모델연도는 소유자 신고 건수에 적용됩니다. "
+        "공식 리콜은 생산기간 기준이라 선택한 모델연도로 억지로 나누지 않고 차종 전체 리콜을 보여줍니다.</div>",
         unsafe_allow_html=True,
     )
-    compare_clicked = st.button("선택한 차량 비교하기", type="primary", width="stretch")
-    if not compare_clicked:
-        st.info("각 차량의 조건을 고른 뒤 비교하기를 눌러 주세요.")
+    if len(saved) < 2:
+        st.info("비교하려면 관심 차량을 2대 이상 등록해 주세요.")
         return
 
     comparison_rows: list[dict[str, object]] = []
-    for car in selected_cars:
+    for car in saved:
         model_id = int(car["model_id"])
-        overview = read_query(OVERVIEW_SQL, {"model_id": model_id})
-        if overview.empty:
+        metrics = get_summary_metrics(model_id, car["year"])
+        if metrics is None:
             continue
-        summary = overview.iloc[0]
-        model_year = car["model_year"]
-        if model_year == "전체 연식":
-            complaint_count = int(summary["complaint_count"])
-        else:
-            complaint_result = read_query(
-                DEFECT_COUNT_BY_YEAR_SQL,
-                {"model_id": model_id, "model_year": int(model_year)},
-            )
-            complaint_count = int(complaint_result.iloc[0]["complaint_count"])
-        year_label = "전체" if model_year == "전체 연식" else f"{model_year}년형"
+        year_label, complaint_count, recall_count, affected_sum = metrics
+        year_text = "전체" if car["year"] == "전체 연식" else f"{car['year']}년형"
         comparison_rows.append(
             {
                 "model_id": model_id,
-                "display_name": f"{car['manufacturer']} · {car['model_name']} ({year_label})",
+                "display_name": f"{car['manufacturer']} · {car['model_name']} ({year_text})",
                 "manufacturer_name": car["manufacturer"],
                 "model_name": car["model_name"],
-                "model_year": year_label,
+                "model_year": year_text,
                 "complaint_count": complaint_count,
-                "recall_record_count": int(summary["recall_record_count"]),
-                "affected_count_sum": int(summary["affected_count_sum"]),
+                "recall_record_count": recall_count,
+                "affected_count_sum": affected_sum,
             }
         )
 
@@ -988,15 +1588,14 @@ def render_compare() -> None:
         return
 
     chart_data = comparison.melt(
-        id_vars=["display_name"],
+        id_vars=["display_name", "model_name"],
         value_vars=["complaint_count", "recall_record_count"],
         var_name="지표",
         value_name="건수",
     )
     chart_data["지표"] = chart_data["지표"].map({"complaint_count": "소유자 신고", "recall_record_count": "공식 리콜 기록"})
-    # 긴 제조사·차종명은 축에서 짧게 보여주고, 전체 이름은 마우스를 올렸을 때 표시한다.
-    chart_data["chart_label"] = chart_data["display_name"].map(
-        lambda value: value if len(str(value)) <= 22 else f"{str(value)[:21]}…"
+    chart_data["chart_label"] = chart_data["model_name"].map(
+        lambda value: value if len(str(value)) <= 14 else f"{str(value)[:13]}…"
     )
     chart = px.bar(
         chart_data,
@@ -1009,11 +1608,12 @@ def render_compare() -> None:
         color_discrete_map={"소유자 신고": "#4b8fe8", "공식 리콜 기록": "#f0a15b"},
     )
     chart.update_layout(
-        height=400,
-        margin=dict(l=10, r=10, t=25, b=10),
+        height=320,
+        margin=dict(l=10, r=10, t=20, b=10),
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
         bargap=0.35,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
     )
     chart.update_xaxes(
         type="category",
@@ -1023,18 +1623,45 @@ def render_compare() -> None:
     )
     chart.update_yaxes(rangemode="tozero", tickformat=",d")
     chart.update_traces(width=0.32)
-    st.plotly_chart(chart, width="stretch", config={"displayModeBar": False})
-    st.dataframe(
-        comparison.rename(
-            columns={
-                "manufacturer_name": "제조사", "model_name": "대표 차종", "model_year": "모델연도",
-                "complaint_count": "소유자 신고수", "recall_record_count": "공식 리콜 기록",
-                "affected_count_sum": "리콜 대상 대수 합계",
-            }
-        ).drop(columns=["model_id"]),
-        width="stretch",
-        hide_index=True,
-    )
+
+    used_names: set[str] = set()
+    transposed_columns: dict[str, list[str]] = {}
+    for _, row in comparison.iterrows():
+        column_name = str(row["model_name"])
+        if column_name in used_names:
+            column_name = f"{row['manufacturer_name']} {row['model_name']}"
+        suffix = 2
+        unique_name = column_name
+        while unique_name in used_names:
+            unique_name = f"{column_name} {suffix}"
+            suffix += 1
+        used_names.add(unique_name)
+        transposed_columns[unique_name] = [
+            str(row["manufacturer_name"]),
+            str(row["model_name"]),
+            str(row["model_year"]),
+            format_number(row["complaint_count"]),
+            f"{format_number(row['recall_record_count'])}건",
+            f"{format_number(row['affected_count_sum'])}대",
+        ]
+    comparison_table = pd.DataFrame(
+        transposed_columns,
+        index=["제조사", "대표 차종", "모델연도", "소유자 신고수", "공식 리콜 기록", "리콜 대상 대수 합계"],
+    ).rename_axis("항목").reset_index()
+
+    table_col, chart_col = st.columns(2, gap="medium")
+    with table_col:
+        st.dataframe(
+            comparison_table,
+            width="stretch",
+            hide_index=True,
+            height=320,
+            column_config={
+                "항목": st.column_config.TextColumn("항목", pinned=True, width="medium"),
+            },
+        )
+    with chart_col:
+        st.plotly_chart(chart, width="stretch", config={"displayModeBar": False})
 
 
 def render_help() -> None:
@@ -1067,25 +1694,31 @@ def render_help() -> None:
 
 
 # 앱을 새로 열었을 때만 공익광고를 표시합니다.
-# 우측 상단 X 또는 모달 안의 닫기 버튼을 누르면 현재 세션에서는 닫힌 상태로 유지됩니다.
+# 우측 상단 X를 누르면 현재 세션에서는 닫힌 상태로 유지됩니다.
+# "오늘 하루동안 보지않기"를 선택한 뒤 닫으면 자정까지 다시 보이지 않습니다.
+if st.session_state.get("persist_hide_public_ad"):
+    persist_hide_public_ad_today()
 if st.session_state.get("public_ad_open", True):
     render_public_service_ad()
 
 render_site_header()
-render_interest_summary()
-recall_tab, compare_tab, help_tab = st.tabs(["리콜 조회", "차종 비교", "도움말"])
+render_hero()
+with st.container(key="header-interest", horizontal=True, horizontal_alignment="right"):
+    render_interest_summary()
+recall_tab, compare_tab, help_tab = st.tabs([
+    ":material/search: 차량 조회",
+    ":material/compare_arrows: 차종 비교",
+    ":material/help: 도움말",
+])
 
 with recall_tab:
-    render_hero()
     render_recall_search()
     render_dashboard()
 
 with compare_tab:
-    render_hero()
     render_compare()
 
 with help_tab:
-    render_hero()
     render_help()
 
 
