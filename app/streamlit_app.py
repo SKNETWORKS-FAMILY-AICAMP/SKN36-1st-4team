@@ -713,7 +713,8 @@ def render_dashboard() -> None:
         st.markdown(f"## {html.escape(model_name)} 리콜·결함 요약")
         if year == "전체 연식":
             complaint_count = int(summary["complaint_count"])
-            year_label = "전체 모델연도"
+            year_label = "누적 소비자 결함 신고수"
+            complaint_help = "선택한 대표 차종의 모든 모델연도에 접수된 소비자 결함 신고 행의 누적 건수입니다."
         else:
             year_count = read_query(
                 DEFECT_COUNT_BY_YEAR_SQL,
@@ -721,9 +722,10 @@ def render_dashboard() -> None:
             )
             complaint_count = int(year_count.iloc[0]["complaint_count"])
             year_label = f"{year}년형 신고"
+            complaint_help = f"선택한 {year}년형에 접수된 소비자 결함 신고 행의 수입니다."
         metric_cols = st.columns(3)
         with metric_cols[0]:
-            st.metric(year_label, format_number(complaint_count), help="소유자가 접수한 원본 신고 행 수입니다.")
+            st.metric(year_label, format_number(complaint_count), help=complaint_help)
         with metric_cols[1]:
             st.metric("공식 리콜 기록", f"{format_number(summary['recall_record_count'])}건")
         with metric_cols[2]:
