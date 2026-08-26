@@ -7,7 +7,7 @@ import sqlite3
 import pandas as pd
 import streamlit as st
 
-from config import DB_PATH
+from config import DB_PATH, DEFECT_CHART_START_YEAR
 
 MANUFACTURERS_SQL = """
 SELECT manufacturer_id, manufacturer_name
@@ -82,6 +82,23 @@ JOIN model_overview mo ON mo.model_id = vm.model_id
 ORDER BY m.manufacturer_name, vm.model_name
 """
 
+VISIBLE_DEFECT_YEARS_SQL = """
+SELECT model_id, model_year
+FROM defect_reports
+WHERE model_year IS NOT NULL AND model_year >= :start_year
+GROUP BY model_id, model_year
+"""
+
+# 이 대표 차종으로 접수된 신고의 모델연도가 전부 2015년 이전이면,
+# 지금은 팔지 않는 옛 세대·구형 트림으로 본다.
+OLD_MODEL_YEAR_ONLY_SQL = """
+SELECT model_id
+FROM defect_reports
+WHERE model_year IS NOT NULL
+GROUP BY model_id
+HAVING MAX(model_year) < :start_year
+"""
+
 
 @st.cache_resource
 def get_connection() -> sqlite3.Connection:
@@ -103,6 +120,46 @@ def read_query(query: str, params: tuple | dict = ()) -> pd.DataFrame:
 def load_manufacturers() -> pd.DataFrame:
     """제조사 목록을 읽는다. import 시점이 아니라 호출할 때만 DB를 연다."""
     return read_query(MANUFACTURERS_SQL)
+
+
+@st.cache_data(ttl=300)
+def load_visible_search_model_ids() -> tuple[int, ...]:
+    """2015년 이후 신고와 판매량이 둘 다 없는 차종, 신고가 전부 2015년 이전인 옛 트림은 조회 목록에서 뺀다."""
+    from sales import sales_lookup_for_model
+
+    models = read_query(ALL_MODELS_SQL)
+    years = read_query(VISIBLE_DEFECT_YEARS_SQL, {"start_year": DEFECT_CHART_START_YEAR})
+    models_with_recent_reports = set(years["model_id"].astype(int))
+    old_only = read_query(OLD_MODEL_YEAR_ONLY_SQL, {"start_year": DEFECT_CHART_START_YEAR})
+    models_with_only_old_reports = set(old_only["model_id"].astype(int))
+
+    visible: list[int] = []
+    for row in models.itertuples(index=False):
+        model_id = int(row.model_id)
+        has_reports = model_id in models_with_recent_reports
+        family, _sales_by_year = sales_lookup_for_model(str(row.model_name))
+        # 판매량은 차종 패밀리 단위라, 신고가 전부 2015년 이전인 단종 트림까지
+        # 지금 팔리는 차종의 판매량을 근거로 노출시키지 않는다.
+        has_current_sales = family is not None and model_id not in models_with_only_old_reports
+        if has_reports or has_current_sales:
+            visible.append(model_id)
+    return tuple(visible)
+
+
+def load_search_manufacturers() -> pd.DataFrame:
+    """조회 탭에 보여줄 제조사. 숨긴 차종만 있는 제조사는 빼 둔다."""
+    manufacturers = load_manufacturers()
+    visible_ids = set(load_visible_search_model_ids())
+    models = read_query(ALL_MODELS_SQL)
+    keep_names = set(models.loc[models["model_id"].isin(visible_ids), "manufacturer_name"])
+    return manufacturers.loc[manufacturers["manufacturer_name"].isin(keep_names)].reset_index(drop=True)
+
+
+def load_search_models(manufacturer_id: int) -> pd.DataFrame:
+    """조회 탭에 보여줄 대표 차종."""
+    models = read_query(MODELS_SQL, {"manufacturer_id": manufacturer_id})
+    visible_ids = set(load_visible_search_model_ids())
+    return models.loc[models["model_id"].isin(visible_ids)].reset_index(drop=True)
 
 
 def format_number(value: object) -> str:

@@ -7,6 +7,9 @@ DB_PATH = PROJECT_ROOT / "data" / "processed" / "database" / "recall_checker.sql
 IMAGE_DIR = PROJECT_ROOT / "assets" / "vehicles"
 ICON_DIR = PROJECT_ROOT / "assets" / "icons"
 IMAGE_ALIAS_PATH = PROJECT_ROOT / "data" / "mappings" / "vehicle_image_aliases.csv"
+SALES_BY_YEAR_PATH = PROJECT_ROOT / "data" / "processed" / "processed_data" / "sales_by_year.csv"
+# 판매량 CSV가 2015년부터라, 조회 탭 신고 그래프도 같은 해부터 보여 준다.
+DEFECT_CHART_START_YEAR = 2015
 AD_IMAGE_PATH = PROJECT_ROOT / "assets" / "recall_public_service_ad.png"
 HERO_IMAGE_PATH = PROJECT_ROOT / "assets" / "hero" / "korean-family-suv-sunrise-v2.png"
 SERVICE_LOGO_PATH = PROJECT_ROOT / "assets" / "brand" / "recall-check-logo-v1.png"
